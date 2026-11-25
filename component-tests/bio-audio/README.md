@@ -111,7 +111,7 @@ Interpretation:
 - Calculated sample rate was 47,971 Hz; calculated BCLK was 3,070,175 Hz. These are divider-derived values, not physical measurements.
 - The run establishes that the BIO/FIFO sample-transfer path completed. It does not alone prove that the MAX98357A produced audible output or that I2S waveforms were measured.
 
-Audible sound check: pending user confirmation.
+Audible sound check: user reports no sound. Amplifier VIN measured 3.3 V, SD_MODE-to-GND measured 1.5 V, and disconnected speaker DC resistance measured 8.6 ohms. The user's DIN jumper is confirmed on PC8. This points to a need for pin-level/waveform and amplifier-input diagnosis; successful FIFO completion alone is not audible-output proof.
 Logic-analyser/oscilloscope validation: pending.
 
 ## 7. First playback precautions
@@ -169,3 +169,28 @@ Then compile with `cargo xtask dabao dabao-console`. Inspect the diff and compil
 - PASS does not prove that the breadboard jumper reaches the amplifier's DIN/BCLK/LRC pin.
 - PASS does not prove 3.072 MHz BCLK timing, 48 kHz LRCLK framing, valid I2S data alignment, SD_MODE threshold margin, sufficient amplifier gain, or audible speaker output.
 - After the pin audit, the next software test should drive a repetitive deterministic pattern on one pin at a time and compare it with a logic analyser / multimeter. A multimeter can show static levels but cannot validate MHz clocks.
+
+
+## 10. User-reported silent-output diagnosis
+
+User reports no audible sound after the command reported successful 440 Hz transmission. Additional measurements:
+- MAX98357A VIN-to-GND: 3.3 V.
+- SD_MODE-to-GND: 1.5 V (near the upper mode-selection threshold; exact board resistor network/threshold margin should be checked).
+- Speaker disconnected resistance: 8.6 ohms, consistent with an 8-ohm nominal speaker.
+- User confirms DIN jumper moved to PC8.
+
+A new readback test was committed:
+- `i2s_pin_audit_kernel.rs`: toggles the three BIO pins one at a time and uses BIO x21 to read the GPIO pad input state.
+- `i2s_pin_audit.rs`: claims BIO core/FIFO2/pins using Xous resource management, reads four snapshots with a timeout and releases resources.
+- `i2s_clock_cmd.rs`: exposes `i2sclock pintest`.
+- `install_pin_audit.py`: installs the files and updates the command/module registry.
+
+Expected pad readbacks:
+| Snapshot | Expected |
+|---|---:|
+| all-low | 0x00000000 |
+| DIN high (PC8/BIO24) | 0x01000000 |
+| LRCLK high (PC10/BIO26) | 0x04000000 |
+| BCLK high (PC11/BIO27) | 0x08000000 |
+
+The test confirms BIO-to-pad output/readback. It does not test the external breadboard jumper continuity to the amplifier input, high-speed timing, I2S correctness at the IC pin, amplifier gain, or the SD_MODE threshold margin.
