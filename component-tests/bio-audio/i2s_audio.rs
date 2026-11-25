@@ -17,6 +17,8 @@ const PIN_MASK: u32 = (1 << 24) | (1 << 26) | (1 << 27);
 const TONE_HZ: u32 = 440;
 const TONE_MS: u32 = 250;
 const FADE_MS: u32 = 10;
+pub const DEFAULT_PEAK: u16 = 512;
+pub const MAX_PEAK: u16 = 4096;
 const FIFO_HIGH_WATER: u32 = 6;
 const FIFO_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -27,6 +29,7 @@ const SINE_64: [i16; 64] = [0, 50, 100, 149, 196, 241, 284, 325, 362, 396, 426, 
 pub enum AudioError {
     Bio(BioError),
     Timeout(&'static str, u32),
+    InvalidAmplitude(u32),
 }
 
 impl From<BioError> for AudioError {
@@ -40,6 +43,7 @@ pub struct AudioReport {
     pub lrclk_hz: u32,
     pub frames: u32,
     pub peak_sample: i16,
+    pub requested_peak: u16,
 }
 
 pub struct I2sTone {
@@ -182,7 +186,10 @@ impl I2sTone {
         Ok(())
     }
 
-    pub fn play_440() -> Result<AudioReport, AudioError> {
+    pub fn play_440(requested_peak: u16) -> Result<AudioReport, AudioError> {
+        if requested_peak == 0 || requested_peak > MAX_PEAK {
+            return Err(AudioError::InvalidAmplitude(requested_peak as u32));
+        }
         let mut audio = Self::new()?;
         let actual_sample_rate = audio.actual_quantum_hz / 128;
         if actual_sample_rate == 0 {
@@ -201,7 +208,7 @@ impl I2sTone {
         audio.fifo_write(frames)?;
 
         for frame in 0..frames {
-            let sample = make_sample(frame, frames, fade_frames, actual_sample_rate, &mut phase);
+            let sample = make_sample(frame, frames, fade_frames, actual_sample_rate, requested_peak, &mut phase);
             peak_sample = peak_sample.max(sample.abs());
             let word = (sample as u16) as u32;
             audio.fifo_write(word)?;
@@ -216,6 +223,7 @@ impl I2sTone {
             lrclk_hz: actual_sample_rate,
             frames,
             peak_sample,
+            requested_peak,
         };
         audio.stop()?;
         Ok(report)
@@ -253,10 +261,11 @@ fn make_sample(
     frames: u32,
     fade_frames: u32,
     sample_rate: u32,
+    requested_peak: u16,
     phase: &mut u32,
 ) -> i16 {
     let index = ((*phase as u64 * 64) / sample_rate as u64) as usize & 63;
-    let mut sample = SINE_64[index] as i32;
+    let mut sample = SINE_64[index] as i32 * requested_peak as i32 / 512;
     let fade_in = (frame + 1).min(fade_frames);
     let fade_out = (frames - frame).min(fade_frames);
     let envelope = fade_in.min(fade_out);
