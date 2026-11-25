@@ -3,7 +3,7 @@
 //! FIFO1 format: first word is frame_count, then one u16 sample word for
 //! left and one u16 sample word for right for each frame.
 //! 32-bit I2S slots are used; samples are 16-bit, MSB-aligned with the
-//! standard one-BCLK I2S delay. The unused low 15 bits are zero.
+//! standard one-BCLK I2S delay. After the one-bit delay, the sample occupies bits 30..15; the unused low 15 bits are zero.
 //!
 //! BIO24/PC8 = DIN, BIO26/PC10 = LRCLK, BIO27/PC11 = BCLK.
 
@@ -30,7 +30,7 @@ bio_code!(i2s_audio_kernel, I2S_AUDIO_START, I2S_AUDIO_END,
     "li x8, 0x0C000000",  // clear DIN only
     "li x9, 0x05000000",  // clear BCLK only
     "li x11, 0x09000000", // clear LRCLK only
-    "li x3, 0x80000000",  // sample MSB test mask (x16-x19 are FIFO registers)
+    "li x3, 0x40000000",  // sample MSB after 1-bit I2S delay (bit 30)
     "mv x12, x17",        // frame count from FIFO1
 
 "10:",                    // next stereo frame; fetch both samples before clocks
