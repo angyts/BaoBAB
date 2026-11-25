@@ -90,9 +90,12 @@ impl Haptic {
     // TI section 8.5.8.1.1: signed open-loop RTP uses 0 as neutral,
     // 0x7f as full forward drive. Unsigned zero is NOT neutral.
     pub fn trace_rtp(&mut self, amplitude:u8, out:&mut String)->Result<(),Error> {
+        self.pulse(amplitude,100,out)
+    }
+    pub fn pulse(&mut self, amplitude:u8, ms:u64, out:&mut String)->Result<(),Error> {
         use core::fmt::Write;
         use std::{thread::sleep,time::Duration};
-        if amplitude>127 {return Err(Error::InvalidPulse);}
+        if amplitude>127 || ms==0 || ms>200 {return Err(Error::InvalidPulse);}
         let status=self.probe()?;
         if status & 0x0b != 0 {return Err(Error::Fault(status));}
         let mode=self.read(1)?;
@@ -113,7 +116,7 @@ impl Haptic {
             self.checked_write(1,5)?;
             writeln!(out,"RTP ready: MODE=05 signed neutral=00 clamp=64").unwrap();
             self.checked_write(2,amplitude)?;
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(ms));
             // Stop drive before collecting other registers.
             self.write(1,0x40)?;
             let s=self.status()?;
@@ -147,5 +150,17 @@ impl Haptic {
         final_stop?;
         restore?;
         result
+    }
+
+    /// Each segment uses the proven setup/shutdown path; gaps include I2C overhead.
+    pub fn pattern(&mut self, steps:&[(u8,u64)], out:&mut String)->Result<(),Error> {
+        if steps.is_empty() || steps.len()>5 || steps.iter().any(|&(a,t)| a>127 || t==0 || t>200) {
+            return Err(Error::InvalidPulse);
+        }
+        for &(a,t) in steps {
+            self.pulse(a,t,out)?;
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
+        Ok(())
     }
 }
