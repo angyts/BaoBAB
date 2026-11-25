@@ -72,7 +72,7 @@ bio_code!(i2s_audio_kernel, I2S_AUDIO_START, I2S_AUDIO_END,
     "li x14, 31",
 
 "30:",                    // right slot
-    "and x15, x4, x16",
+    "and x15, x4, x3",
     "beq x15, x0, 31f",
     "mv x22, x7",
     "j 32f",
