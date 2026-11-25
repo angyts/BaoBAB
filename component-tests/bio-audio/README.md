@@ -90,7 +90,31 @@ cargo xtask dabao dabao-console
 
 Do not flash until compiler output and the diff have been reviewed. This prototype has not yet been compiled in the user's local checkout.
 
-## 6. First playback precautions
+## 6. First tone run — user hardware result
+
+The user reported this console output after rebuilding and flashing the FIFO/register corrections:
+
+```text
+i2sclock status
+STOPPED
+
+i2sclock tone440
+Played 440 Hz test tone: quantum=6140351 Hz, BCLK=3070175 Hz, LRCLK=47971 Hz, frames=11992, peak_sample=512.
+BIO resources released.
+```
+
+Interpretation:
+- The audio command completed instead of timing out.
+- The producer successfully wrote all requested sample words.
+- The BIO kernel reached its end-of-buffer path and delivered the completion token.
+- Xous reported BIO resource cleanup complete.
+- Calculated sample rate was 47,971 Hz; calculated BCLK was 3,070,175 Hz. These are divider-derived values, not physical measurements.
+- The run establishes that the BIO/FIFO sample-transfer path completed. It does not alone prove that the MAX98357A produced audible output or that I2S waveforms were measured.
+
+Audible sound check: pending user confirmation.
+Logic-analyser/oscilloscope validation: pending.
+
+## 7. First playback precautions
 
 Before running `i2sclock tone440`:
 1. Verify DIN is connected to PC8 / BIO24, LRC to PC10 / BIO26, BCLK to PC11 / BIO27.
@@ -101,7 +125,7 @@ Before running `i2sclock tone440`:
 6. Stop if speaker output is unexpectedly loud/distorted, or if the amplifier/board heats, smells, or supply voltage droops.
 7. Ideally use a logic analyser/oscilloscope to verify BCLK, LRCLK and DIN; divider readback is not a physical waveform measurement.
 
-## 7. Limitations and known risks
+## 8. Limitations and known risks
 
 - The original audio transmitter compiled and was flashed, but its first tone command failed with `Timeout(\"BIO TX FIFO did not drain\")`. The next revision adds a correct I2S delay bit, preloads three frames before BIO starts, corrects the sample MSB bit mask, and reports FIFO level on timeout. This revision has not yet been compiled or run.
 - BIO FIFO underrun behavior during audio streaming has not been measured. The kernel waits at frame boundaries for sample words; host-side FIFO refill timing may cause clock pauses if the producer cannot keep up.
