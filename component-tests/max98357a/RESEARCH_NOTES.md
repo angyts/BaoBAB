@@ -58,3 +58,69 @@ Useful official refs:
 - Do not start at maximum gain or maximum supply voltage.
 - Do not leave an enabled Class-D amplifier connected to an unknown/shorted load.
 - Do not solder until pin mapping, ground, VDD, SD_MODE, GAIN_SLOT and speaker output have been checked.
+
+## Follow-up: exact Baochip UDMA I2S source inspection
+
+Inspection of public `betrusted-io/xous-core` source (matches the user's checked-out source paths):
+
+### API and event declarations
+
+`libs/bao1x-api/src/udma.rs` defines:
+- `PeriphId::I2s = 1 << 13` (UDMA peripheral clock/reset bit).
+- `PeriphEventId::I2s = 52`.
+- `EventI2sOffset::{Rx=0, Tx=1}`.
+- Generic `PeriphEventType::I2s` and event mapping support.
+
+### SVD register map
+
+`utralib/bao1x/bao1x_peri.svd` defines `UDMA_I2S` at base address `0x5010E000`, register block size `0x30`:
+
+| Offset | Register | Purpose from field names |
+|---:|---|---|
+| 0x00 | REG_RX_SADDR | RX start address |
+| 0x04 | REG_RX_SIZE | RX transfer size |
+| 0x08 | REG_RX_CFG | RX continuous, datasize, enable, clear |
+| 0x10 | REG_TX_SADDR | TX start address |
+| 0x14 | REG_TX_SIZE | TX transfer size |
+| 0x18 | REG_TX_CFG | TX continuous, datasize, enable, clear |
+| 0x20 | REG_I2S_CLKCFG_SETUP | Master/slave/common clock dividers and enables; external/internal selector bits |
+| 0x24 | REG_I2S_SLV_SETUP | Slave word count, bits per word, bit order, stereo enable, peripheral enable |
+| 0x28 | REG_I2S_MST_SETUP | Master word count, bits per word, bit order, stereo enable, peripheral enable |
+| 0x2C | REG_I2S_PDM_SETUP | PDM parameters (not needed for MAX98357A) |
+
+The SVD is a register schema, not a complete programmer's guide. It does not, by itself, establish DMA channel request wiring, exact data packing, FIFO semantics, clock divider formula, safe enable ordering, or physical IOX pin mux assignments.
+
+### HAL status
+
+`libs/bao1x-hal/src/udma/mod.rs` exports `adc`, `i2c`, `spim`, and `uart` modules, but no `i2s` module. Generic `GlobalConfig` supports peripheral clock gating, reset, and event mapping. The dedicated UDMA I2S block is therefore present in the public API/SVD layer but does not have an existing high-level Baochip HAL driver in this checkout.
+
+### Important distinction: legacy audio service
+
+`services/codec/src/backend/tlv320aic3100.rs` uses the separate legacy `utra::audio` peripheral and an I2C-controlled TLV320AIC3100 codec. It documents standard I2S, master clocks and 16-bit sample / 32-bit word / stereo setup at 8 kHz (512 kHz BCLK), and manages a legacy audio FIFO and interrupt handler. This is useful as a conceptual example of streaming PCM and frame buffering, but it is **not** an implementation of UDMA_I2S and it controls a different audio codec. We should not transplant its register accesses into a MAX98357A driver.
+
+### MAX98357A confirmed from manufacturer information
+
+The official MAX98357A datasheet and Analog Devices product page state:
+- Supply VDD 2.5–5.5 V.
+- Standard I2S, left-justified and TDM inputs; MAX98357A is the I2S version.
+- No MCLK pin / no MCLK required.
+- Sample rates 8–96 kHz.
+- GAIN_SLOT selects gain in I2S/LJ modes; selectable gains 3/6/9/12/15 dB.
+- SD_MODE is shutdown and channel-select control; pulling low shuts down.
+- Speaker outputs OUTP and OUTN are differential; neither is ground.
+
+Sources:
+- https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf
+- https://www.analog.com/en/products/max98357a.html
+- https://github.com/betrusted-io/xous-core/blob/master/libs/bao1x-api/src/udma.rs
+- https://github.com/betrusted-io/xous-core/blob/master/utralib/bao1x/bao1x_peri.svd
+- https://github.com/betrusted-io/xous-core/blob/master/libs/bao1x-hal/src/udma/mod.rs
+- https://github.com/betrusted-io/xous-core/blob/master/services/codec/src/backend/tlv320aic3100.rs
+
+## Remaining hard blockers before wiring
+
+1. Trace the UDMA I2S RTL (link in SVD: `rtl/ips/udma/udma_i2s/rtl/udma_i2s_reg_if.sv`) and associated TX engine to learn descriptor/transfer semantics and divider calculations.
+2. Determine how UDMA I2S master BCLK, WS/LRCLK, and SDOUT are routed through Dabao IOX. No pinout assignment has been proven. Previously guessed PC9/PC10/PC11 are explicitly unverified and must not be connected or soldered based on the guess.
+3. Verify the exact MAX98357A breakout variant and its onboard SD_MODE/GAIN_SLOT strap circuitry from a clear photo/schematic.
+4. Confirm the available supply rail and current margin for the class-D amplifier and the 8 ohm / 0.5 W speaker. VDD's supported voltage range does not mean every board rail has enough current.
+5. Implement and compile a standalone UDMA_I2S driver or safe minimal test before enabling the amplifier.
