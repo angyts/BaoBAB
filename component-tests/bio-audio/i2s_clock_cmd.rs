@@ -1,5 +1,6 @@
 use crate::{CommonEnv, ShellCmdApi};
 use bio_lib::i2s_clock::I2sClockTest;
+use bio_lib::i2s_audio::I2sTone;
 use core::fmt::Write;
 use String;
 
@@ -69,7 +70,31 @@ impl<'a> ShellCmdApi<'a> for I2sClockCmd {
                     out.push_str("STOPPED");
                 }
             }
-            _ => out.push_str("i2sclock start | status | stop"),
+            "tone440" => {
+                if self.test.is_some() {
+                    out.push_str("Stop the clock-only test first: i2sclock stop");
+                } else {
+                    match I2sTone::play_440() {
+                        Ok(report) => {
+                            writeln!(
+                                out,
+                                "Played 440 Hz test tone: quantum={} Hz, BCLK={} Hz, LRCLK={} Hz, frames={}, peak_sample={}.",
+                                report.quantum_hz,
+                                report.bclk_hz,
+                                report.lrclk_hz,
+                                report.frames,
+                                report.peak_sample
+                            )
+                            .unwrap();
+                            out.push_str("BIO resources released.");
+                        }
+                        Err(error) => {
+                            writeln!(out, "Audio test failed: {:?}", error).unwrap();
+                        }
+                    }
+                }
+            }
+            _ => out.push_str("i2sclock start | status | stop | tone440"),
         }
         Ok(Some(out))
     }
