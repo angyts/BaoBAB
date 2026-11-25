@@ -193,15 +193,23 @@ impl I2sTone {
         let frames = (actual_sample_rate * TONE_MS) / 1000;
         let fade_frames = ((actual_sample_rate * FADE_MS) / 1000).max(1);
         let mut phase = 0u32;
-        let first_sample = make_sample(0, frames, fade_frames, actual_sample_rate, &mut phase);
         audio.fifo_write(frames)?;
-        audio.fifo_write((first_sample as u16) as u32)?;
-        audio.fifo_write((first_sample as u16) as u32)?;
+
+        // Prefill three complete stereo frames (7 FIFO words including the
+        // frame count) before starting BIO. This avoids an immediate empty-FIFO
+        // stall while the Xous producer is still entering its streaming loop.
+        let mut peak_sample = 0i16;
+        for frame in 0..3 {
+            let sample = make_sample(frame, frames, fade_frames, actual_sample_rate, &mut phase);
+            peak_sample = peak_sample.max(sample.abs());
+            let word = (sample as u16) as u32;
+            audio.fifo_write(word)?;
+            audio.fifo_write(word)?;
+        }
 
         audio.bio.set_core_run_state(audio.grant.as_ref().unwrap(), true);
 
-        let mut peak_sample = first_sample.abs();
-        for frame in 1..frames {
+        for frame in 3..frames {
             let sample = make_sample(frame, frames, fade_frames, actual_sample_rate, &mut phase);
             peak_sample = peak_sample.max(sample.abs());
             let word = (sample as u16) as u32;
