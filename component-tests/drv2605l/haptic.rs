@@ -9,6 +9,7 @@ impl<'a> ShellCmdApi<'a> for HapticCmd {
     fn process(&mut self,args:String,_env:&mut CommonEnv)->Result<Option<String>,xous::Error>{
         let mut out=String::new();
         let mut dev=Haptic::new();
+        let words:Vec<&str>=args.split_whitespace().collect();
         match args.trim() {
             "info"=>match dev.probe(){
                 Ok(s)=>{writeln!(out,"STATUS=0x{:02X} ID={} diagnostic_fail={} overtemp={} overcurrent={}",s,s>>5,(s>>3)&1,(s>>1)&1,s&1).unwrap();}
@@ -29,7 +30,16 @@ impl<'a> ShellCmdApi<'a> for HapticCmd {
             "audit"=>{let result=dev.audit(&mut out);writeln!(out,"Audit: {:?}",result).unwrap();},
             "rtpzero"=>{let result=dev.trace_rtp(0,&mut out);writeln!(out,"RTP zero: {:?}",result).unwrap();},
             "trace"=>{let result=dev.trace_rtp(127,&mut out);writeln!(out,"RTP pulse: {:?}",result).unwrap();},
-            _=>out.push_str("haptic info | registers | selftest | audit | rtpzero | trace | stop"),
+            "ladder"=>{let result=dev.pattern(&[(32,100),(64,100),(96,100),(127,100)],&mut out);writeln!(out,"Ladder: {:?}",result).unwrap();},
+            "double"=>{let result=dev.pattern(&[(127,100),(127,100)],&mut out);writeln!(out,"Double: {:?}",result).unwrap();},
+            "warning"=>{let result=dev.pattern(&[(127,100),(127,100),(127,200)],&mut out);writeln!(out,"Warning: {:?}",result).unwrap();},
+            _ if words.len()==3 && words[0]=="pulse"=>{
+                match (words[1].parse::<u8>(),words[2].parse::<u64>()){
+                    (Ok(a),Ok(ms))=>{let result=dev.pulse(a,ms,&mut out);writeln!(out,"Pulse: {:?}",result).unwrap();},
+                    _=>out.push_str("Invalid arguments"),
+                }
+            },
+            _=>out.push_str("haptic info | registers | selftest | audit | rtpzero | trace | pulse <0-127> <1-200 ms> | ladder | double | warning | stop"),
         }
         Ok(Some(out))
     }
