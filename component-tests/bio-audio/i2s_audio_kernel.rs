@@ -37,8 +37,13 @@ bio_code!(i2s_audio_kernel, I2S_AUDIO_START, I2S_AUDIO_END,
     "mv x4, x17",          // left sample (unsigned 16-bit payload)
     "mv x13, x17",         // right sample (unsigned 16-bit payload)
     "mv x23, x11",         // LRCLK low: MAX98357A left channel
-    "slli x4, x4, 15",     // one I2S delay bit, then 16 sample bits, then zero pad
-    "li x14, 32",          // 32 BCLKs per channel slot
+    "mv x23, x8",          // DIN low during the mandatory I2S delay bit
+    "mv x22, x5",          // delay-bit BCLK rising edge
+    "mv x20, x0",
+    "mv x23, x9",          // delay-bit BCLK falling edge
+    "mv x20, x0",
+    "slli x4, x4, 15",     // next 16 bits are the signed sample MSBs
+    "li x14, 31",          // remaining 31 clocks: 16 data + 15 zero padding
 
 "20:",                    // left slot
     "and x15, x4, x3",
@@ -57,9 +62,14 @@ bio_code!(i2s_audio_kernel, I2S_AUDIO_START, I2S_AUDIO_END,
     "bne x14, x0, 20b",
 
     "mv x22, x6",           // LRCLK high: right channel
+    "mv x23, x8",          // DIN low during the mandatory I2S delay bit
+    "mv x22, x5",          // delay-bit BCLK rising edge
+    "mv x20, x0",
+    "mv x23, x9",          // delay-bit BCLK falling edge
+    "mv x20, x0",
     "mv x4, x13",
     "slli x4, x4, 15",
-    "li x14, 32",
+    "li x14, 31",
 
 "30:",                    // right slot
     "and x15, x4, x16",
