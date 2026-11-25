@@ -15,8 +15,6 @@ pub struct I2sLineHold {
     grant: Option<ResourceGrant>,
     core: BioCore,
     _tx_handle: CoreHandle,
-    tx: CoreCsr,
-    held_mask: u32,
 }
 
 impl Resources for I2sLineHold {
@@ -73,7 +71,7 @@ impl I2sLineHold {
                 return Err(error);
             }
         };
-        let tx = CoreCsr::from_handle(&tx_handle);
+        let mut tx = CoreCsr::from_handle(&tx_handle);
         bio.set_core_run_state(&grant, true);
         let start = Instant::now();
         while tx.csr.rf(bio_bdma::SFR_FLEVEL_PCLK_REGFIFO_LEVEL1) >= 8 {
@@ -90,10 +88,8 @@ impl I2sLineHold {
             xous::yield_slice();
         }
         tx.csr.wo(bio_bdma::SFR_TXF1, held_mask);
-        Ok(Self { bio, grant: Some(grant), core, _tx_handle: tx_handle, tx, held_mask })
+        Ok(Self { bio, grant: Some(grant), core, _tx_handle: tx_handle })
     }
-
-    pub fn held_mask(&self) -> u32 { self.held_mask }
 
     pub fn stop(&mut self) -> Result<(), BioError> {
         if let Some(grant) = self.grant.take() {
