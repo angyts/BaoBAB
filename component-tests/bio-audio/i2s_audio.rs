@@ -14,7 +14,6 @@ use crate::i2s_audio_kernel;
 
 const CLAIMER: &str = "BaoBAB-I2S-audio";
 const PIN_MASK: u32 = (1 << 24) | (1 << 26) | (1 << 27);
-const TARGET_SAMPLE_RATE: u32 = 48_000;
 const TONE_HZ: u32 = 440;
 const TONE_MS: u32 = 250;
 const FADE_MS: u32 = 10;
