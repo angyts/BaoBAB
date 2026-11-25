@@ -248,3 +248,18 @@ Suggested test procedure:
 
 A successful far-end static voltage test proves continuity and DC level, not high-speed signal integrity. If all three pass and audio remains silent, the next decisive test is an oscilloscope/logic-analyser capture at the amplifier input pins (BCLK, LRCLK and DIN) during a tone. That validates actual waveform, frequency, timing and data framing.
 
+
+## 12. External static-level test — user reports all pass
+
+The user ran the `linehold` tests and reports that all three signal wires measured the expected HIGH voltage at the amplifier end:
+- DIN / PC8 / BIO24: expected HIGH level observed.
+- LRCLK / PC10 / BIO26: expected HIGH level observed.
+- BCLK / PC11 / BIO27: expected HIGH level observed.
+
+Together with the earlier BIO pad readback 4/4 PASS, this establishes:
+1. BIO can drive the three selected pad outputs.
+2. The selected pad-to-header jumper paths pass a static DC HIGH test.
+3. The three external wires are not simply open or connected to an entirely different row.
+
+It still does **not** verify dynamic waveforms, clock frequency, duty cycle, I2S framing at the amplifier pin, or the amplifier's analog output. Next decisive evidence is a logic-analyser/oscilloscope capture of BCLK, LRCLK and DIN during the 440 Hz command. A software-only BIO readback can add an internal dynamic self-check, but it cannot replace an external timing measurement.
+
