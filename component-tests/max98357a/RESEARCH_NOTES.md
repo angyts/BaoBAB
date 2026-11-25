@@ -148,3 +148,25 @@ RTL inspected:
 - https://github.com/baochip/baochip-1x/blob/main/rtl/ips/udma/udma_i2s/rtl/i2s_clk_gen.sv
 - https://github.com/betrusted-io/xous-core/blob/master/libs/bao1x-hal/src/iox.rs
 
+
+## Critical pin-mux discovery: dedicated UDMA I2S signals are on Port D
+
+Inspection of `baochip/baochip-1x/rtl/modules/ifsub/rtl/soc_ifsub.sv` shows the I2S master signals are attached to AF1 pads:
+- `af1_D[10]` = `i2sm_sd` (I2S master data out)
+- `af1_D[11]` = `i2sm_ws` (I2S master word select / LRCLK)
+- `af1_D[12]` = `i2sm_sck` (I2S master bit clock / BCLK)
+
+The output channel 1 is unconnected in `ifsub1_intf.sv`; channel 0 is the data output used by the master interface. That is sufficient for a mono MAX98357A if channel selection/slot is matched, but data framing still requires test.
+
+The official Dabao 40-pin pinout page lists the header GPIO pins as PB and PC (alongside power/ground), not PD10/PD11/PD12. Source: https://github.com/baochip/dabao/blob/main/docs/pinout/index.html . Therefore the dedicated UDMA I2S master pins do not appear to be exposed on the standard expansion headers. We have not established whether PD10-12 are available on test pads or another connector. Do not wire the MAX98357A to these pins unless a board schematic confirms physical access.
+
+This changes the implementation decision:
+- Preferred UDMA I2S block is present and its master TX pins are fixed to PD10/11/12 AF1.
+- Standard Dabao GPIO expansion headers expose PB/PC, so a direct UDMA I2S breakout connection is currently not demonstrated.
+- Practical prototype fallback is to evaluate a BIO-based I2S transmitter on three verified, accessible PB/PC pins (e.g. previous PC9/PC10/PC11 are merely candidate free pins, not yet confirmed as mechanically free or non-conflicting). BIO can generate clocks and data in deterministic instruction sequences, but sample streaming, FIFO buffering, clock budget and concurrency must be designed and tested.
+- Alternative is to locate PD10/11/12 test pads / board signals from Dabao schematic and see whether jumper wires can reach them. No soldering until verified.
+
+Sources:
+- https://github.com/baochip/baochip-1x/blob/main/rtl/modules/ifsub/rtl/soc_ifsub.sv
+- https://github.com/baochip/baochip-1x/blob/main/rtl/modules/ifsub/rtl/ifsub1_intf.sv
+- https://github.com/baochip/dabao/blob/main/docs/pinout/index.html
