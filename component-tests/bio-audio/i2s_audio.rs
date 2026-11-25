@@ -26,7 +26,7 @@ const SINE_64: [i16; 64] = [0, 50, 100, 149, 196, 241, 284, 325, 362, 396, 426, 
 #[derive(Debug)]
 pub enum AudioError {
     Bio(BioError),
-    Timeout(&'static str),
+    Timeout(&'static str, u32),
 }
 
 impl From<BioError> for AudioError {
@@ -162,7 +162,7 @@ impl I2sTone {
         let start = Instant::now();
         while self.tx.csr.rf(bio_bdma::SFR_FLEVEL_PCLK_REGFIFO_LEVEL1) > FIFO_HIGH_WATER {
             if start.elapsed() > FIFO_TIMEOUT {
-                return Err(AudioError::Timeout("BIO TX FIFO did not drain"));
+                return Err(AudioError::Timeout("BIO TX FIFO did not drain", self.tx.csr.rf(bio_bdma::SFR_FLEVEL_PCLK_REGFIFO_LEVEL1)));
             }
             xous::yield_slice();
         }
@@ -174,7 +174,7 @@ impl I2sTone {
         let start = Instant::now();
         while self.rx.csr.rf(bio_bdma::SFR_FLEVEL_PCLK_REGFIFO_LEVEL2) == 0 {
             if start.elapsed() > FIFO_TIMEOUT {
-                return Err(AudioError::Timeout("BIO audio kernel did not signal completion"));
+                return Err(AudioError::Timeout("BIO audio kernel did not signal completion", self.rx.csr.rf(bio_bdma::SFR_FLEVEL_PCLK_REGFIFO_LEVEL2)));
             }
             xous::yield_slice();
         }
