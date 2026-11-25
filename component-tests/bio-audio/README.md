@@ -133,3 +133,39 @@ Before running `i2sclock tone440`:
 - No separate MCLK is required by MAX98357A.
 - The first tone is a bring-up test, not a general-purpose PCM player.
 - The exact breakout variant and its onboard GAIN/SD_MODE resistor network should be verified against its vendor schematic if the first test is silent.
+
+## 8. Software pin readback audit
+
+Xous's BIO instruction set defines:
+- x21: read GPIO pad input state into x21.
+- x22: set output bits selected by x26.
+- x23: clear output bits selected by x26 using clear-on-zero semantics.
+- x24: configure selected bits as outputs.
+
+The new `i2s_pin_audit_kernel.rs` drives BIO24, BIO26 and BIO27 individually and reports four actual pad-input snapshots through BIO FIFO2:
+1. All three outputs low -> expected 0x00000000.
+2. DIN high only -> expected 0x01000000.
+3. LRCLK high only -> expected 0x04000000.
+4. BCLK high only -> expected 0x08000000.
+
+`i2s_pin_audit.rs` reserves one BIO core, FIFO2 and pins 24/26/27 through Xous resource manager, reads all four snapshots with a 500 ms timeout, and releases resources. The console command is `i2sclock pintest`; expected output is four PASS lines.
+
+Install the pin audit after the clock/audio modules:
+```bash
+python3 /path/to/BaoBAB/component-tests/bio-audio/install_pin_audit.py "$PWD"
+git diff --check
+git status --short
+git diff
+```
+
+Then compile with `cargo xtask dabao dabao-console`. Inspect the diff and compiler output before flashing.
+
+**Safety:** run the pin audit with MAX98357A VIN disconnected or its supply otherwise disabled. The audit deliberately generates short static logic-high levels on each audio signal pin; it is not an audio test. It checks BIO-to-pad output and readback, not the wire from the Dabao header to the amplifier input. A logic analyser or direct voltage test at the amplifier pad is needed to verify the external jumper path and signal waveform.
+
+## 9. What this audit can and cannot prove
+
+- PASS verifies the selected BIO bit controls the corresponding Dabao GPIO pad and that the pad input readback sees the expected level.
+- FAIL points toward BIO output mask, pad mux/direction, or BIO kernel semantics.
+- PASS does not prove that the breadboard jumper reaches the amplifier's DIN/BCLK/LRC pin.
+- PASS does not prove 3.072 MHz BCLK timing, 48 kHz LRCLK framing, valid I2S data alignment, SD_MODE threshold margin, sufficient amplifier gain, or audible speaker output.
+- After the pin audit, the next software test should drive a repetitive deterministic pattern on one pin at a time and compare it with a logic analyser / multimeter. A multimeter can show static levels but cannot validate MHz clocks.
