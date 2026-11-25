@@ -1,116 +1,110 @@
 # BIO-powered I2S audio experiment (Xous / Dabao)
 
-**Status:** first clock-only test source committed; not yet installed into Xous, compiled, or tested on hardware. The 440 Hz tone and PCM streaming are not implemented. The MAX98357A may be connected only after the clock test is reviewed and the wiring below is corrected.
+**Status:** clock-only BIO test passed on hardware. A bounded 440 Hz PCM tone implementation is committed, but has not yet been installed into the user's Xous checkout, compiled, or played.
 
-## 1. Existing Xous facilities
-
-The current Xous tree includes the Baochip BIO service and Rust interface:
-- `libs/bao1x-api/src/bio.rs`: `BioApi`, `BioCore`, `BioPin`, `ClockMode`, `IoConfig`, and `bio_code!`.
-- `libs/bao1x-api/src/bio_resources.rs`: runtime BIO core/FIFO/pin reservation types.
-- `libs/bao1x-hal/src/bio.rs`: Xous client for BIO and resource management.
-- `libs/bao1x-hal/src/bio_hw.rs`: hardware implementation for loading cores, clock dividers and BIO I/O mapping.
-- `services/bao1x-hal-service/src/servers/bio.rs`: BIO server/resource tracker.
-- `libs/bio-lib/src/ws2812.rs`: working example of BIO program setup, resource claims, pin mapping, core start/stop and CSR handles.
-
-BaoBAB should reuse Xous's BIO service and resource manager. Do not write directly to BIO registers or bypass its ownership tracker.
-
-Source references:
-- https://github.com/betrusted-io/xous-core/blob/main/libs/bao1x-api/src/bio.rs
-- https://github.com/betrusted-io/xous-core/blob/main/libs/bao1x-api/src/bio_resources.rs
-- https://github.com/betrusted-io/xous-core/blob/main/libs/bao1x-hal/src/bio.rs
-- https://github.com/betrusted-io/xous-core/blob/main/libs/bao1x-hal/src/bio_hw.rs
-- https://github.com/betrusted-io/xous-core/blob/main/libs/bio-lib/src/ws2812.rs
-
-## 2. Corrected Dabao BIO pin mapping
-
-Xous maps PB pins to BIO bits 0-15 and PC pins to BIO bits 16-31:
-- PC8 = BIO24
-- PC9 = BIO25
-- PC10 = BIO26
-- PC11 = BIO27
-
-The Dabao console's existing BIO loader allow-list is:
-`[1, 2, 3, 4, 5, 11, 12, 16, 17, 18, 19, 23, 24, 26, 27, 28, 29]`.
-
-Therefore PC9 / BIO25 is excluded by that allow-list. It was incorrectly proposed earlier as the audio data pin. **Do not use PC9 for this experiment.** The clock test uses PC8 / BIO24 for data instead, because BIO24 is included in the allow-list. PC10 / BIO26 and PC11 / BIO27 are also in that list.
-
-| Signal | Dabao pad | BIO bit | MAX98357A |
-|---|---|---:|---|
-| Serial data (DIN) | PC8 | 24 | DIN |
-| Word/frame select | PC10 | 26 | LRC / LRCLK |
-| Bit clock | PC11 | 27 | BCLK |
-| Power | 3V3 | — | VIN |
-| Ground | GND | — | GND |
-
-The standard Dabao pinout identifies PC8 as physical header pin 7, PC10 as physical pin 5, and PC11 as physical pin 4. Confirm the header orientation against the official pinout before moving jumpers: https://github.com/baochip/dabao/blob/main/docs/pinout/index.html
-
-BIO bit numbers are positions in the BIO bitmask, not GPIO port pin numbers.
-
-## 3. MAX98357A facts
-
-Manufacturer datasheet: https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf
-
-- MAX98357A accepts standard I2S (DIN, BCLK, LRCLK) and does not require MCLK.
-- Supports 8 kHz–96 kHz sample rates and 16/24/32-bit I2S resolution.
-- OUT+ and OUT- are bridge-tied speaker outputs. Neither speaker lead may be grounded.
-- Verify the exact breakout board's GAIN and SD_MODE straps; breakout clones can differ.
-
-Adafruit breakout notes: https://learn.adafruit.com/adafruit-max98357-i2s-class-d-mono-amp/pinouts
-
-## 4. Wiring reference (corrected)
+## 1. Verified wiring
 
 | MAX98357A | Dabao |
 |---|---|
 | VIN | 3V3 |
 | GND | GND |
-| DIN | **PC8 / BIO24** |
+| DIN | PC8 / BIO24 |
 | LRC | PC10 / BIO26 |
 | BCLK | PC11 / BIO27 |
-| GAIN | Leave open for initial bring-up (subject to exact breakout variant) |
-| SD | Keep the breakout's default resistor network intact; don't wire to GPIO |
-| OUT+ / OUT- | Speaker across both outputs; neither side to GND |
+| GAIN | Leave open for initial bring-up |
+| SD_MODE | Preserve the breakout's existing resistor network |
+| OUT+ / OUT- | 8-ohm speaker across both outputs; neither side to GND |
 
-**Move the existing DIN jumper from PC9 to PC8 before installing/running this test.** Leave BCLK and LRC on PC11 and PC10 respectively. Do not solder anything.
+PC9 / BIO25 was proposed first for DIN, but it is excluded from the Dabao console BIO loader allow-list. Use PC8 / BIO24 instead. Physical Dabao pinout: https://github.com/baochip/dabao/blob/main/docs/pinout/index.html
 
-## 5. Current implementation: clock-only test
+## 2. Clock-only test already passed
 
-Files:
-- `i2s_clock_kernel.rs`: BIO assembly kernel. DIN remains low. It toggles BCLK and LRCLK only.
-- `i2s_clock.rs`: Xous BIO resource-managed wrapper with explicit start/stop and pin cleanup.
-- `i2s_clock_cmd.rs`: Dabao console command `i2sclock start|status|stop`.
-- `install.py`: conservative installer for a local Xous checkout. It does not build or flash.
-
-At a nominal BIO quantum of 3.072 MHz, the kernel performs two quantum waits per BCLK period:
-- BCLK nominal = 1.536 MHz.
-- LRCLK toggles after 16 BCLK periods, giving 48 kHz full-period LRCLK.
-- DIN is held low (digital zero); this is a clock smoke test, not a tone.
-
-The frequency printed by the command comes from Xous's actual BIO clock-divider calculation. Hardware timing must still be checked; the printed number is the configured quantum rate, not an oscilloscope measurement.
-
-## 6. Safe test sequence
-
-1. Power down the board before moving the DIN jumper from PC9 to PC8.
-2. Confirm VIN and GND connections, speaker connected only across OUT+ and OUT-, and no unintended shorts.
-3. Review the installer diff before building.
-4. Build and flash using the user's established Xous procedure.
-5. Start the BIO clock-only test with the MAX98357A powered from 3V3 and DIN held low. This is digital silence; use low volume conditions and stop immediately for unexpected noise, heat, smell, or excessive current.
-6. Observe BCLK/LRCLK with a logic analyser or oscilloscope if available. Verify approximately 1.536 MHz BCLK and 48 kHz LRCLK.
-7. Stop the clock test and verify it reports pins released.
-8. Only after clocks are verified should we implement the 440 Hz PCM tone, followed by bounded PCM playback.
-
-Command sequence:
+The user successfully ran:
 ```text
 i2sclock start
 i2sclock status
 i2sclock stop
 ```
 
-## 7. Remaining work
+Reported divider-derived frequencies:
+- BIO quantum: 3,070,175 Hz
+- BCLK: 1,535,087 Hz
+- LRCLK: 47,971 Hz
+- stop: BIO core stopped and pins reported released
 
-- No BIO I2S 440 Hz tone or PCM streaming has been implemented.
-- No hardware clock measurement has been made.
-- No audio output has yet been validated.
-- Need to review BCLK/LRCLK waveform against the MAX98357A timing diagrams and verify that the chosen 16-bit slot format is accepted by the actual module.
-- Need add low-amplitude sample generation, a bounded playback duration, explicit stop-on-error, and audio buffer management before sound tests.
+These values came from the configured BIO divider calculation, not an oscilloscope/logic-analyser measurement. This demonstrated BIO core start/stop and resource release, not valid audio data.
 
-**Do not treat this clock-only implementation as a working audio player.**
+## 3. 440 Hz tone implementation
+
+The new prototype uses standard I2S with 32-bit channel slots carrying 16-bit PCM:
+- Target BIO quantum: 6.144 MHz.
+- Target BCLK: 3.072 MHz.
+- Target LRCLK: 48 kHz.
+- 32 BCLKs per channel slot; 64 BCLKs per stereo frame.
+- Standard I2S one-BCLK delay after each LRCLK transition.
+- 16-bit signed sample occupies the upper 16 data bits after the delay; remaining 15 slot bits are zero.
+- 250 ms tone with 10 ms fade-in/out.
+- 64-entry sine table, peak magnitude 512 / 32767 (about 1.6% full scale).
+- Mono sample duplicated to left and right channels.
+- FIFO1 streams the frame count and sample words to BIO; FIFO2 provides a completion token.
+- BIO stops sample output after a full stereo frame, drives the outputs low, signals completion, then remains in a quiet loop until host cleanup.
+- Xous producer checks FIFO water level and has a bounded FIFO/completion timeout.
+- Resource manager claims one BIO core, FIFO1, FIFO2 and pins 24, 26, 27.
+
+Manufacturer datasheet: https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf
+
+The MAX98357A supports standard I2S and 8–96 kHz sample rates. Its timing diagram requires a one-BCLK delay from LRCLK transition to the next word's MSB. The 32-bit slot target is selected to make the 16-bit sample alignment explicit and give a conventional 3.072 MHz BCLK at 48 kHz.
+
+## 4. Source files
+
+- `i2s_clock_kernel.rs`: clock-only BIO kernel, DIN low.
+- `i2s_clock.rs`: clock-only Xous resource-managed wrapper.
+- `i2s_audio_kernel.rs`: BIO I2S data transmitter, 32-bit channel slots.
+- `i2s_audio.rs`: bounded 440 Hz PCM generator and BIO FIFO interface.
+- `i2s_clock_cmd.rs`: console commands, including `i2sclock tone440`.
+- `install_audio.py`: installer for audio API/kernel and updated command.
+
+## 5. Install into local Xous checkout
+
+First update BaoBAB:
+```bash
+cd ~/Documents/Code/BaoBAB
+git pull
+```
+
+From the local `xous-core` directory:
+```bash
+python3 ~/Documents/Code/BaoBAB/component-tests/bio-audio/install_audio.py "$PWD"
+git diff --check
+git status --short
+git diff
+```
+
+The installer refuses to overwrite existing audio source files or patch a source tree with unexpected module declarations.
+
+Then compile:
+```bash
+cargo xtask dabao dabao-console
+```
+
+Do not flash until compiler output and the diff have been reviewed. This prototype has not yet been compiled in the user's local checkout.
+
+## 6. First playback precautions
+
+Before running `i2sclock tone440`:
+1. Verify DIN is connected to PC8 / BIO24, LRC to PC10 / BIO26, BCLK to PC11 / BIO27.
+2. Confirm amplifier VIN is 3.3 V relative to amplifier GND and there is no supply short.
+3. Speaker must connect only between OUT+ and OUT-. Never ground either output.
+4. Keep GAIN open and preserve the breakout's SD_MODE resistor network.
+5. Start with the committed bounded 250 ms tone only; do not loop or increase amplitude.
+6. Stop if speaker output is unexpectedly loud/distorted, or if the amplifier/board heats, smells, or supply voltage droops.
+7. Ideally use a logic analyser/oscilloscope to verify BCLK, LRCLK and DIN; divider readback is not a physical waveform measurement.
+
+## 7. Limitations and known risks
+
+- The custom audio transmitter has not yet been compiled or run.
+- BIO FIFO underrun behavior during audio streaming has not been measured. The kernel waits at frame boundaries for sample words; host-side FIFO refill timing may cause clock pauses if the producer cannot keep up.
+- The target quantum and actual frequencies must be checked on hardware.
+- No separate MCLK is required by MAX98357A.
+- The first tone is a bring-up test, not a general-purpose PCM player.
+- The exact breakout variant and its onboard GAIN/SD_MODE resistor network should be verified against its vendor schematic if the first test is silent.
