@@ -1,6 +1,6 @@
 # MAX98357A component bring-up
 
-Status: research stage. No hardware wiring or firmware has been validated.
+Status: source research stage. Dedicated UDMA I2S hardware is present in the SoC, but no high-level Baochip HAL driver or validated pin mapping has been found. No audio wiring or firmware has been validated.
 
 ## Initial discoveries
 
@@ -21,3 +21,6 @@ Status: research stage. No hardware wiring or firmware has been validated.
 8. Test PCM playback and shutdown.
 
 No GPIO assignments are approved yet. Earlier PC9/PC10/PC11 are only guesses and must not be soldered.
+
+
+See [RESEARCH_NOTES.md](RESEARCH_NOTES.md) for source-backed register map, MAX98357A specifications, and unresolved pin-mux/driver questions.
