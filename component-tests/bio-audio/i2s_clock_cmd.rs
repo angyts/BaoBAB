@@ -75,16 +75,29 @@ impl<'a> ShellCmdApi<'a> for I2sClockCmd {
                 if self.test.is_some() {
                     out.push_str("Stop the clock-only test first: i2sclock stop");
                 } else {
-                    match I2sTone::play_440() {
+                    let requested_peak = match args.split_whitespace().next().map(str::parse::<u16>) {
+                        None => bio_lib::i2s_audio::DEFAULT_PEAK,
+                        Some(Ok(value)) if [512, 1024, 2048, 4096].contains(&value) => value,
+                        Some(Ok(_)) => {
+                            out.push_str("Allowed amplitudes: 512, 1024, 2048, 4096 (maximum).");
+                            return Ok(Some(out));
+                        }
+                        Some(Err(_)) => {
+                            out.push_str("Usage: i2sclock tone440 [512|1024|2048|4096]");
+                            return Ok(Some(out));
+                        }
+                    };
+                    match I2sTone::play_440(requested_peak) {
                         Ok(report) => {
                             writeln!(
                                 out,
-                                "Played 440 Hz test tone: quantum={} Hz, BCLK={} Hz, LRCLK={} Hz, frames={}, peak_sample={}.",
+                                "Played 440 Hz tone: peak={} / 32767 ({:.1}%), quantum={} Hz, BCLK={} Hz, LRCLK={} Hz, frames={}.",
+                                report.requested_peak,
+                                report.requested_peak as f32 * 100.0 / 32767.0,
                                 report.quantum_hz,
                                 report.bclk_hz,
                                 report.lrclk_hz,
-                                report.frames,
-                                report.peak_sample
+                                report.frames
                             )
                             .unwrap();
                             out.push_str("BIO resources released.");
