@@ -22,7 +22,8 @@ pub const MAX_PEAK: u16 = 4096;
 const FIFO_HIGH_WATER: u32 = 6;
 const FIFO_TIMEOUT: Duration = Duration::from_secs(3);
 
-// Peak amplitude 512/32767, before fade envelope.
+// SINE_64 is normalized to a 512 peak; requested_peak scales it up.
+// The console restricts values to 512, 1024, 2048 or 4096.
 const SINE_64: [i16; 64] = [0, 50, 100, 149, 196, 241, 284, 325, 362, 396, 426, 452, 473, 490, 502, 510, 512, 510, 502, 490, 473, 452, 426, 396, 362, 325, 284, 241, 196, 149, 100, 50, 0, -50, -100, -149, -196, -241, -284, -325, -362, -396, -426, -452, -473, -490, -502, -510, -512, -510, -502, -490, -473, -452, -426, -396, -362, -325, -284, -241, -196, -149, -100, -50];
 
 #[derive(Debug)]
