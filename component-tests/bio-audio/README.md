@@ -263,3 +263,29 @@ Together with the earlier BIO pad readback 4/4 PASS, this establishes:
 
 It still does **not** verify dynamic waveforms, clock frequency, duty cycle, I2S framing at the amplifier pin, or the amplifier's analog output. Next decisive evidence is a logic-analyser/oscilloscope capture of BCLK, LRCLK and DIN during the 440 Hz command. A software-only BIO readback can add an internal dynamic self-check, but it cannot replace an external timing measurement.
 
+
+## 13. Code review after all three far-end static voltages passed
+
+The user reports that the static `linehold` measurements at the MAX98357A end of all three wires are correct. Combined with the BIO pad-readback test, DC pin mapping and continuity checks pass.
+
+A source audit identified a software timing defect in the current `i2s_audio_kernel.rs`:
+- The command reports `BCLK = actual_quantum_hz / 2` and `LRCLK = actual_quantum_hz / 128` as though each BCLK period were exactly two BIO quantum waits.
+- The serializer does not actually place BCLK edges exactly two quantum waits apart. Between successive BCLK edges, the loop executes data-test instructions, conditional branches, data set/clear instructions, shifts, counter updates and a loop branch. Some paths have different instruction counts for 0 and 1 bits.
+- Therefore the reported BCLK/LRCLK values are divider-derived estimates, **not measured or guaranteed output frequencies**. The bit-cell low time is not explicitly bounded to match the high time, and data-dependent branch paths may introduce clock duty-cycle/jitter variation.
+- Successful FIFO completion proves that BIO consumed the supplied words and reached the completion path; it does not validate that the resulting clock waveform meets the MAX98357A timing requirements.
+
+This is a credible software-side explanation for silence. Do not increase the tone amplitude further. The next firmware revision should redesign the serial bit-cell timing so every bit has a deterministic, balanced BCLK high/low period, with data prepared outside the timing-critical edge sequence. The host must report only a calculated target until a physical timing measurement is available.
+
+MAX98357A Rev. 16 (February 2026) specifies 10 ns setup and 10 ns hold for DIN and LRCLK relative to BCLK (electrical characteristics). It accepts I2S, with a one-BCLK delay after LRCLK transition; BCLK is sampled on rising edge and LRCLK low indicates left channel. It supports 8–96 kHz, with specifically enumerated LRCLK frequencies including 48 kHz. See:
+- https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf
+- Table 5 / Figure 4: SD_MODE channel/shutdown selection and B0/B1/B2 thresholds.
+- Figure 8: 32-bit I2S resolution timing.
+
+SD_MODE measured at 1.5 V is **not shutdown** (B0 max 0.355 V), but it is at the B2 maximum comparator threshold (B2 min 1.245 V, typ 1.4 V, max 1.5 V). The selected channel mode is therefore not guaranteed by that measurement alone. Since the current tone duplicates identical samples to both L/R slots, channel selection alone should not explain silence; nevertheless, SD_MODE should be given a clear margin above B2 or set to a deliberate supported selection after checking the exact breakout circuit.
+
+Recommended next validation:
+1. Rewrite the BIO serializer to generate a deterministic bit cell with symmetric BCLK high and low intervals and balanced 0/1 paths; keep DIN stable before the BCLK rising edge.
+2. Add a short dynamic pad-readback self-test (x21) that checks BCLK and LRCLK transitions and bit counts at the pad; this is an on-chip internal check, not a substitute for scope/logic-analyser capture.
+3. Once available, capture BCLK, LRCLK, DIN at the MAX98357A inputs and check 3.072 MHz BCLK (for 48 kHz, 32-bit/channel slots), 48 kHz LRCLK, one-bit I2S delay, 32 BCLKs per channel, and DIN setup/hold.
+4. Only after waveform validation, re-test the amplifier at a low fixed amplitude.
+
