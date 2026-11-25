@@ -30,7 +30,7 @@ bio_code!(i2s_audio_kernel, I2S_AUDIO_START, I2S_AUDIO_END,
     "li x8, 0x0C000000",  // clear DIN only
     "li x9, 0x05000000",  // clear BCLK only
     "li x11, 0x09000000", // clear LRCLK only
-    "li x16, 0x80000000", // sample MSB test mask
+    "li x3, 0x80000000",  // sample MSB test mask (x16-x19 are FIFO registers)
     "mv x12, x17",        // frame count from FIFO1
 
 "10:",                    // next stereo frame; fetch both samples before clocks
@@ -41,7 +41,7 @@ bio_code!(i2s_audio_kernel, I2S_AUDIO_START, I2S_AUDIO_END,
     "li x14, 32",          // 32 BCLKs per channel slot
 
 "20:",                    // left slot
-    "and x15, x4, x16",
+    "and x15, x4, x3",
     "beq x15, x0, 21f",
     "mv x22, x7",          // DIN high for a one
     "j 22f",
