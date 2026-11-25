@@ -27,7 +27,9 @@ impl<'a> ShellCmdApi<'a> for HapticCmd {
             },
             "stop"=>{writeln!(out,"Stop: {:?}",dev.stop()).unwrap();},
             "audit"=>{let result=dev.audit(&mut out);writeln!(out,"Audit: {:?}",result).unwrap();},
-            _=>out.push_str("haptic info | registers | selftest | audit | stop (playback disabled)"),
+            "rtpzero"=>{let result=dev.trace_rtp(0,&mut out);writeln!(out,"RTP zero: {:?}",result).unwrap();},
+            "trace"=>{let result=dev.trace_rtp(127,&mut out);writeln!(out,"RTP pulse: {:?}",result).unwrap();},
+            _=>out.push_str("haptic info | registers | selftest | audit | rtpzero | trace | stop"),
         }
         Ok(Some(out))
     }
