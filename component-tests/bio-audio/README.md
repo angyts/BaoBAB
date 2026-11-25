@@ -194,3 +194,26 @@ Expected pad readbacks:
 | BCLK high (PC11/BIO27) | 0x08000000 |
 
 The test confirms BIO-to-pad output/readback. It does not test the external breadboard jumper continuity to the amplifier input, high-speed timing, I2S correctness at the IC pin, amplifier gain, or the SD_MODE threshold margin.
+
+## 10. Staged tone amplitude control
+
+The console tone command now accepts only four predefined peak PCM amplitudes:
+```text
+i2sclock tone440 512
+i2sclock tone440 1024
+i2sclock tone440 2048
+i2sclock tone440 4096
+```
+Bare `i2sclock tone440` remains the default 512 level. The API rejects zero and values above 4096; the console also rejects values not in the four-step list.
+
+| Step | Peak PCM magnitude | Percent of signed 16-bit positive full scale |
+|---|---:|---:|
+| 1 | 512 | 1.6% |
+| 2 | 1,024 | 3.1% |
+| 3 | 2,048 | 6.2% |
+| 4 | 4,096 | 12.5% |
+
+Each playback remains a 250 ms 440 Hz tone with 10 ms fades. The 4096 ceiling is a conservative software test limit, not a calibrated loudness or guaranteed speaker power limit. Actual output depends on amplifier gain, supply, breakout design and speaker; stop for harsh distortion, abnormal heating or supply droop. Do not infer that 100% PCM is safe for the 0.5 W speaker.
+
+This change has been committed but not yet installed, compiled or flashed on the user's device.
+
