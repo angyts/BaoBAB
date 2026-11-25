@@ -41,9 +41,15 @@ impl I2sClockTest {
             clock_mode: ClockMode::TargetFreqInt(3_072_000),
         };
 
-        let actual_quantum_hz = match bio.init_core(core, i2s_clock_kernel(), 0, config) {
+        // The current Xous API accepts (program, optional pad word), not an
+        // older (program, offset) pair.
+        let actual_quantum_hz = match bio.init_core(core, i2s_clock_kernel(), config) {
             Ok(Some(freq)) => freq,
-            Ok(None) => 3_072_000,
+            Ok(None) => {
+                let _ = bio.de_init_core(core);
+                let _ = bio.release_resources(grant.grant_id);
+                return Err(BioError::InternalError);
+            }
             Err(error) => {
                 let _ = bio.release_resources(grant.grant_id);
                 return Err(error);
@@ -55,6 +61,10 @@ impl I2sClockTest {
         io.mapped = PIN_MASK;
         if let Err(error) = bio.setup_io_config(io) {
             let _ = bio.de_init_core(core);
+            let mut clear = IoConfig::default();
+            clear.mode = IoConfigMode::ClearOnly;
+            clear.mapped = !PIN_MASK;
+            let _ = bio.setup_io_config(clear);
             let _ = bio.release_resources(grant.grant_id);
             return Err(error);
         }
