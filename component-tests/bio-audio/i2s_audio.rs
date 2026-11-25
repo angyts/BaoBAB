@@ -10,7 +10,7 @@ use bao1x_hal::bio::{Bio, CoreCsr};
 use std::time::{Duration, Instant};
 use utralib::utra::bio_bdma;
 
-use crate::i2s_audio_kernel;
+use crate::i2s_audio_kernel::i2s_audio_kernel;
 
 const CLAIMER: &str = "BaoBAB-I2S-audio";
 const PIN_MASK: u32 = (1 << 24) | (1 << 26) | (1 << 27);
@@ -158,7 +158,7 @@ impl I2sTone {
         })
     }
 
-    fn fifo_write(&self, word: u32) -> Result<(), AudioError> {
+    fn fifo_write(&mut self, word: u32) -> Result<(), AudioError> {
         let start = Instant::now();
         while self.tx.csr.rf(bio_bdma::SFR_FLEVEL_PCLK_REGFIFO_LEVEL1) > FIFO_HIGH_WATER {
             if start.elapsed() > FIFO_TIMEOUT {
