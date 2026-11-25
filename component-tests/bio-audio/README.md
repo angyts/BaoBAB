@@ -1,6 +1,6 @@
 # BIO-powered I2S audio experiment (Xous / Dabao)
 
-**Status:** clock-only BIO test passed on hardware. A bounded 440 Hz PCM tone implementation is committed, but has not yet been installed into the user's Xous checkout, compiled, or played.
+**Status:** clock-only BIO test passed on hardware. A bounded 440 Hz PCM tone implementation is committed and flashed once, but its first run timed out waiting for the BIO TX FIFO to drain. The timeout means the BIO consumer did not drain the producer queue quickly enough; root cause was not conclusively isolated. Fixes below are committed but have not yet been rebuilt or run.
 
 ## 1. Verified wiring
 
@@ -41,12 +41,13 @@ The new prototype uses standard I2S with 32-bit channel slots carrying 16-bit PC
 - Target BCLK: 3.072 MHz.
 - Target LRCLK: 48 kHz.
 - 32 BCLKs per channel slot; 64 BCLKs per stereo frame.
-- Standard I2S one-BCLK delay after each LRCLK transition.
+- Standard I2S one-BCLK delay after each LRCLK transition. This was added after the first attempt omitted it.
 - 16-bit signed sample occupies the upper 16 data bits after the delay; remaining 15 slot bits are zero.
 - 250 ms tone with 10 ms fade-in/out.
 - 64-entry sine table, peak magnitude 512 / 32767 (about 1.6% full scale).
 - Mono sample duplicated to left and right channels.
-- FIFO1 streams the frame count and sample words to BIO; FIFO2 provides a completion token.
+- FIFO1 streams the frame count and sample words to BIO; FIFO2 provides a completion token. The host preloads three stereo frames (7 words including count) before starting BIO to reduce startup starvation risk.
+- TX FIFO timeout now reports the FIFO level observed at timeout.
 - BIO stops sample output after a full stereo frame, drives the outputs low, signals completion, then remains in a quiet loop until host cleanup.
 - Xous producer checks FIFO water level and has a bounded FIFO/completion timeout.
 - Resource manager claims one BIO core, FIFO1, FIFO2 and pins 24, 26, 27.
@@ -102,7 +103,7 @@ Before running `i2sclock tone440`:
 
 ## 7. Limitations and known risks
 
-- The custom audio transmitter has not yet been compiled or run.
+- The original audio transmitter compiled and was flashed, but its first tone command failed with `Timeout(\"BIO TX FIFO did not drain\")`. The next revision adds a correct I2S delay bit, preloads three frames before BIO starts, corrects the sample MSB bit mask, and reports FIFO level on timeout. This revision has not yet been compiled or run.
 - BIO FIFO underrun behavior during audio streaming has not been measured. The kernel waits at frame boundaries for sample words; host-side FIFO refill timing may cause clock pauses if the producer cannot keep up.
 - The target quantum and actual frequencies must be checked on hardware.
 - No separate MCLK is required by MAX98357A.
