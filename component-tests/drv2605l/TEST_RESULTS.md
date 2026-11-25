@@ -4,3 +4,7 @@ Read-only console implementation added; not compiled or flashed. Install with py
 
 ## Hardware success — 2026-11-26
 VIN 3.3 V; spare motor 38.5 ohms, installed 38.8 ohms. ID 7, E0, 31 register reads, 10/10 identity checks. Register audit passed all stages. Signed RTP zero and four reported trace runs returned Ok with E0/40/64/A0 before restoration, successful shutdown/restoration; builder reports physical vibration. Final stop Ok, status E0. New strength/pattern commands preserve clamp 0x64 and signed RTP, limit individual requested sleeps to 200 ms and patterns to five segments with 250 ms gaps. Not compiled or tested yet. Motor rating and regulator headroom remain unknown; HAL can block, so duration is not a hard safety bound. ROM effects and calibration deferred pending ratings. No permanent wiring approval yet.
+
+
+## Strength characterization
+Builder reports ladder and double difficult to distinguish, maximum drive feels stronger. Individual 200 ms pulses at existing clamp 0x64: 32/127 nothing; 64/127 weak; 96/127 medium; 127/127 strong. Subjective observations, not accelerometer measurements. Proposed presets 64/96/127; shorter pulse effectiveness not established. Prefer rhythm for distinct feedback. No increase in clamp; exact motor ratings and regulator headroom remain unverified.
