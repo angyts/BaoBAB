@@ -147,4 +147,37 @@ impl<'a> ShellCmdApi<'a> for I2sClockCmd {
         }
         Ok(Some(out))
     }
+}            "pintest" => {
+                if self.test.is_some() {
+                    out.push_str("Stop the clock-only test first: i2sclock stop");
+                } else {
+                    match I2sPinAudit::run() {
+                        Ok(samples) => {
+                            let expected = [0u32, 1 << 24, 1 << 26, 1 << 27];
+                            let labels = ["all-low", "DIN-high", "LRCLK-high", "BCLK-high"];
+                            let mut passed = true;
+                            for i in 0..4 {
+                                let ok = samples[i] == expected[i];
+                                passed &= ok;
+                                writeln!(
+                                    out,
+                                    "{}: readback=0x{:08X}, expected=0x{:08X} {}",
+                                    labels[i],
+                                    samples[i],
+                                    expected[i],
+                                    if ok { "PASS" } else { "FAIL" }
+                                ).unwrap();
+                            }
+                            writeln!(out, "Pin readback audit: {}", if passed { "4/4 PASS" } else { "FAILED" }).unwrap();
+                        }
+                        Err(error) => {
+                            writeln!(out, "Pin audit failed: {:?}", error).unwrap();
+                        }
+                    }
+                }
+            }
+            _ => out.push_str("i2sclock start | status | stop | pintest | tone440"),
+        }
+        Ok(Some(out))
+    }
 }
