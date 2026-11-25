@@ -124,3 +124,27 @@ Sources:
 3. Verify the exact MAX98357A breakout variant and its onboard SD_MODE/GAIN_SLOT strap circuitry from a clear photo/schematic.
 4. Confirm the available supply rail and current margin for the class-D amplifier and the 8 ohm / 0.5 W speaker. VDD's supported voltage range does not mean every board rail has enough current.
 5. Implement and compile a standalone UDMA_I2S driver or safe minimal test before enabling the amplifier.
+
+## Follow-up: Baochip RTL trace (public `baochip/baochip-1x` main branch)
+
+### UDMA and TX channel observations
+
+- `rtl/modules/ifsub/rtl/udma_sub.sv` instantiates `udma_i2s_top` and connects it to dedicated UDMA TX and RX channels. The TX path has a request/grant/data/valid/ready handshake and a UDMA TX event. The RX I2S source maps to event offset 0; TX maps to offset 1.
+- `libs/bao1x-api/src/udma.rs` sets I2S event base 52; therefore the TX event number is 53 (52 + `EventI2sOffset::Tx`).
+- `i2s_tx_channel.sv` consumes FIFO words for channel 0 then channel 1 in stereo mode, waits for a word-select edge, shifts serialized sample bits, and requests the next word at word boundaries. This means the TX data stream is sample words, not an opaque PCM byte stream. Exact UDMA/DMA transfer size, channel packing and memory alignment still need a full RTL trace before coding.
+- The RTL clock generator captures and uses configured divider values to toggle a generated clock. Exact BCLK and WS division relationship must be traced through `i2s_clkws_gen.sv` and top-level mux configuration; do not assume the divider formula from the SVD field name alone.
+- `udma_i2s_top.sv` exposes master data output(s), master clock and word-select signals. `i2s_txrx.sv` has separate channel 0 and channel 1 data outputs. The MAX98357A is mono and can be fed one channel; whether to use channel 0/left slot depends on the exact SD_MODE strap/channel selection.
+- The TX path's early FIFO behavior is important: it loads left and right channel words before running; underflow/late data could cause bad output. A safe driver should use continuous DMA, frame buffers, and explicit end-of-stream silence / disable ordering rather than isolated register pokes.
+
+### Pin mapping still unresolved
+
+`libs/bao1x-hal/src/iox.rs` provides generic AF selection and BIO PIO muxing. For PC pins, the BIO mapping is distinct from the UDMA I2S peripheral mapping. Merely seeing `IoxFunction::AF1` or a pin name does not identify which AF1 peripheral function is physically wired to a particular Dabao header. The SoC pad/IOX alternate-function table and Dabao breakout pinout must be traced before choosing physical pins. The earlier PC9/PC10/PC11 suggestion remains unverified.
+
+RTL inspected:
+- https://github.com/baochip/baochip-1x/blob/main/rtl/modules/ifsub/rtl/udma_sub.sv
+- https://github.com/baochip/baochip-1x/blob/main/rtl/ips/udma/udma_i2s/rtl/udma_i2s_top.sv
+- https://github.com/baochip/baochip-1x/blob/main/rtl/ips/udma/udma_i2s/rtl/i2s_txrx.sv
+- https://github.com/baochip/baochip-1x/blob/main/rtl/ips/udma/udma_i2s/rtl/i2s_tx_channel.sv
+- https://github.com/baochip/baochip-1x/blob/main/rtl/ips/udma/udma_i2s/rtl/i2s_clk_gen.sv
+- https://github.com/betrusted-io/xous-core/blob/master/libs/bao1x-hal/src/iox.rs
+
