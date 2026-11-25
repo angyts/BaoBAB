@@ -1,0 +1,3 @@
+# Bring-up log
+Xous bcfdca404. Source confirms PB11 SCL, PB12 SDA, AF1, channel 0, 400 kHz. Initial probe NACK; VIN 0.7 V, SDA/SCL 3.3 V, Dabao 3V3 relative to module ground 3.3 V. Suspected supply connection; subsequent probe returned Device found at address 5A. Corrected VIN not reported. Device ID and motor functionality untested.
+Read-only console implementation added; not compiled or flashed. Install with python3 install.py /path/to/xous-core, inspect diff, build using existing Dabao workflow. Commands haptic info, haptic registers, haptic selftest. No motor writes. Next phase: verify motor ratings and corrected VIN, then implement bounded playback, calibration, diagnostics and stop.
