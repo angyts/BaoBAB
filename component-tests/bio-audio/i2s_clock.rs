@@ -7,7 +7,7 @@ use bao1x_api::bio::*;
 use bao1x_api::bio_resources::*;
 use bao1x_hal::bio::Bio;
 
-use crate::i2s_clock_kernel;
+use crate::i2s_clock_kernel::i2s_clock_kernel;
 
 const CLAIMER: &str = "BaoBAB-I2S-clock";
 const PIN_MASK: u32 = (1 << 24) | (1 << 26) | (1 << 27);
