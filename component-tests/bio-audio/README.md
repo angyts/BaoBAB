@@ -1,6 +1,6 @@
 # BIO-powered I2S audio experiment (Xous / Dabao)
 
-**Status:** clock-only BIO test passed on hardware. A bounded 440 Hz PCM tone implementation is committed and flashed once, but its first run timed out waiting for the BIO TX FIFO to drain. The timeout means the BIO consumer did not drain the producer queue quickly enough; root cause was not conclusively isolated. Fixes below are committed but have not yet been rebuilt or run.
+**Status:** clock-only BIO test passed on hardware; BIO GPIO readback passed 4/4; the 440 Hz sample/FIFO path completed but no audible sound was heard. Static line-hold diagnostic is committed but not yet compiled or run.
 
 ## 1. Verified wiring
 
@@ -216,4 +216,35 @@ Bare `i2sclock tone440` remains the default 512 level. The API rejects zero and 
 Each playback remains a 250 ms 440 Hz tone with 10 ms fades. The 4096 ceiling is a conservative software test limit, not a calibrated loudness or guaranteed speaker power limit. Actual output depends on amplifier gain, supply, breakout design and speaker; stop for harsh distortion, abnormal heating or supply droop. Do not infer that 100% PCM is safe for the 0.5 W speaker.
 
 This change has been committed but not yet installed, compiled or flashed on the user's device.
+
+
+## 11. External jumper line-hold diagnostic
+
+The on-chip `i2sclock pintest` passed 4/4, proving the BIO signal masks and pad readback. It does not prove that each breadboard jumper reaches the MAX98357A input.
+
+The new optional `i2sclock linehold` test holds one selected signal at a static logic HIGH while holding the other two LOW:
+- `i2sclock linehold din` -> PC8 / BIO24 high.
+- `i2sclock linehold lrclk` -> PC10 / BIO26 high.
+- `i2sclock linehold bclk` -> PC11 / BIO27 high.
+- `i2sclock linehold stop` -> stop BIO, unmap pins and release resources.
+
+The BIO test is resource-managed and has no audio clocks. It is intended for a DMM continuity/voltage check at the far end of each jumper. The three module pins are input-only from the amplifier side; a steady high from Dabao is a normal logic level while VIN is powered.
+
+Install after the existing audio and pintest support:
+```bash
+python3 /path/to/BaoBAB/component-tests/bio-audio/install_line_hold.py "$PWD"
+git diff --check
+git status --short
+git diff
+```
+Build with `cargo xtask dabao dabao-console`, inspect the diff/compiler output, then flash.
+
+Suggested test procedure:
+1. Leave MAX98357A VIN powered at 3.3V and keep common GND connected. Keep the speaker connected as usual; no tone is being played.
+2. Run `i2sclock linehold din`. Measure from the DIN signal at the amplifier-side header to amplifier GND. Expect close to 3.3V. Then run `i2sclock linehold stop`.
+3. Repeat for `lrclk` and `bclk`, stopping after each test. Expect close to 3.3V at the corresponding amplifier-side input.
+4. If an input does not read high, inspect that wire/jumper and its breadboard row; do not adjust firmware audio amplitude.
+5. Do not use the DMM to infer a MHz clock; this diagnostic holds a static level only.
+
+A successful far-end static voltage test proves continuity and DC level, not high-speed signal integrity. If all three pass and audio remains silent, the next decisive test is an oscilloscope/logic-analyser capture at the amplifier input pins (BCLK, LRCLK and DIN) during a tone. That validates actual waveform, frequency, timing and data framing.
 
