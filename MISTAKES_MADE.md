@@ -15,3 +15,7 @@ Reference: https://www.ti.com/lit/ds/symlink/drv2605l.pdf
 ## General rules
 
 Read primary datasheet and pinned HAL before implementation; separate measured facts from assumptions; test no-load register access before actuation; use named constants, explicit state transitions, checked writes and error reporting; test mock failure paths; compile before claiming readiness; record hardware results and failures; breadboard before permanent soldering. No irreversible security changes or real wallet funds.
+
+## Follow-up: register audit and RTP encoding
+
+Hardware audit passed immediate, delayed, standby and rewake readback and restoration. TI section 8.5.8.1.1 figure 26 exposes a specific prior mistake: unsigned open-loop RTP uses midpoint as neutral, not zero. Old stop wrote zero before standby, potentially commanding negative drive; old 10–30% unsigned commands were not positive low-intensity pulses. New diagnostic uses signed RTP, zero neutral, 0x7F forward, disables startup boost, sets clamp 0x64, enters standby before clearing RTP, and traces configuration retention. Motor and regulator ratings still unverified; trace is experimental, not a hard timed safety bound. New revision not compiled or hardware tested. No OTP writes.
