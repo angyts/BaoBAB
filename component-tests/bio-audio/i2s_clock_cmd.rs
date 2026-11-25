@@ -24,7 +24,8 @@ impl<'a> ShellCmdApi<'a> for I2sClockCmd {
         _env: &mut CommonEnv,
     ) -> Result<Option<String>, xous::Error> {
         let mut out = String::new();
-        match args.trim() {
+        let mut args = args.split_whitespace();
+        match args.next().unwrap_or("") {
             "start" => {
                 if self.test.is_some() {
                     out.push_str("I2S clock test is already running.");
@@ -75,7 +76,7 @@ impl<'a> ShellCmdApi<'a> for I2sClockCmd {
                 if self.test.is_some() {
                     out.push_str("Stop the clock-only test first: i2sclock stop");
                 } else {
-                    let requested_peak = match args.split_whitespace().next().map(str::parse::<u16>) {
+                    let requested_peak = match args.next().map(str::parse::<u16>) {
                         None => bio_lib::i2s_audio::DEFAULT_PEAK,
                         Some(Ok(value)) if [512, 1024, 2048, 4096].contains(&value) => value,
                         Some(Ok(_)) => {
@@ -87,13 +88,18 @@ impl<'a> ShellCmdApi<'a> for I2sClockCmd {
                             return Ok(Some(out));
                         }
                     };
+                    if args.next().is_some() {
+                        out.push_str("Usage: i2sclock tone440 [512|1024|2048|4096]");
+                        return Ok(Some(out));
+                    }
                     match I2sTone::play_440(requested_peak) {
                         Ok(report) => {
                             writeln!(
                                 out,
-                                "Played 440 Hz tone: peak={} / 32767 ({:.1}%), quantum={} Hz, BCLK={} Hz, LRCLK={} Hz, frames={}.",
+                                "Played 440 Hz tone: peak={} / 32767 ({}.{:01}%), quantum={} Hz, BCLK={} Hz, LRCLK={} Hz, frames={}.",
                                 report.requested_peak,
-                                report.requested_peak as f32 * 100.0 / 32767.0,
+                                (report.requested_peak as u32 * 1000 / 32767) / 10,
+                                (report.requested_peak as u32 * 1000 / 32767) % 10,
                                 report.quantum_hz,
                                 report.bclk_hz,
                                 report.lrclk_hz,
