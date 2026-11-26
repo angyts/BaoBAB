@@ -22,7 +22,7 @@ if cmd_file.exists():
     raise SystemExit(f"Refusing to overwrite existing file: {cmd_file}")
 
 registry_text = registry.read_text()
-module_anchor = "mod bio;\nuse bio::*;"
+module_anchor = "mod i2cdetect;\nuse i2cdetect::*;"
 dispatch_anchor = "        let mut i2cdetect_cmd = I2cDetect {};"
 array_anchor = "            &mut i2cdetect_cmd,"
 
