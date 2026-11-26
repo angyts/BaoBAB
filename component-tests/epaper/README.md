@@ -141,6 +141,50 @@ The first test must not access the RTC, use partial refresh, or add fonts/graphi
 This folder documents the implementation plan; it is not a claim that the display driver is already implemented or working.
 
 
+## Verbose diagnostics and one-build workflow — 2026-11-27
+
+The e-Paper console command now includes process-wide log verbosity control and a non-refresh diagnostic pass.
+
+### Runtime controls
+
+Run these from the Xous console:
+
+```text
+epaper debug status
+epaper debug on
+epaper diag
+epaper debug off
+```
+
+- `debug on` raises the current Xous console process log ceiling to Trace. It is process-wide, so it also exposes trace-level messages emitted by other code running in that process.
+- `debug off` restores the Info log ceiling.
+- `diag` checks HAL service lookup, PB/PC GPIO bank reads, SPIM2 clock/reset IPC acknowledgements, SPIM2 object/DMA allocation, and the resource-drop path. It does not issue panel commands, transmit SPI bytes, toggle GPIO outputs, or refresh the screen.
+
+**Interpretation:** a PASS for clock enable/disable or peripheral reset means the HAL accepted the IPC request. The current HAL server does not return an independent hardware-status result for these operations. Likewise, dropping the SPIM object exercises the IFRAM cleanup path but is not a readback proof that the allocator is healthy. The diagnostic output deliberately distinguishes those limits.
+
+The normal `epaper reset` remains GPIO-only. The normal SPI actions use raw HAL scalar IPC for clock enable/reset/disable, reporting request failures instead of using the panic-on-error `UdmaGlobal` wrappers. A failed clock-disable request is logged explicitly.
+
+### Required safety prerequisite
+
+Before running `epaper diag` or any SPI action, make sure the Xous checkout has the IFRAM unmap page-index fix described in the section below. The diagnostic deliberately allocates and drops an SPIM object; without the fix, the known HAL bug can panic the HAL service during cleanup.
+
+### Install and build once
+
+Update the BaoBAB component source, run the IFRAM patch installer against the Xous checkout, review both diffs, and build before flashing:
+
+```bash
+python3 /path/to/BaoBAB/component-tests/epaper/install.py "$PWD"
+python3 /path/to/BaoBAB/component-tests/epaper/fix_xous_ifram_unmap.py "$PWD"
+git diff --check
+git status --short
+git diff
+cargo xtask dabao dabao-console
+```
+
+The installers only change source files. They do not build, flash or access the board. Keep the resulting Xous diff available for review. Do not flash unless the full build succeeds.
+
+**Verification status:** source changes are committed in BaoBAB. The firmware has not been compiled in the user's Xous checkout and has not been flashed or hardware-tested in this environment. Do not interpret the diagnostic code as hardware validation.
+
 ## Initial Xous console test source
 
 The first command implementation is in `epaper.rs`. Install it into a Xous checkout with:
