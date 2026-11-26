@@ -2,12 +2,22 @@ use crate::{CommonEnv, ShellCmdApi};
 use String;
 
 use bao1x_api::{
-    IoSetup, IoxDir, IoxDriveStrength, IoxEnable, IoxFunction, IoxHal, IoxPort, IoxValue,
-    PeriphId, SpimChannel,
+    HalOpcode, IoSetup, IoxDir, IoxDriveStrength, IoxEnable, IoxFunction, IoxHal, IoxPort,
+    IoxValue, PeriphId, SpimChannel, SERVER_NAME_BAO1X_HAL,
 };
 use bao1x_hal::udma::{Spim, SpimClkPha, SpimClkPol, SpimCs};
-use bao1x_hal_service::UdmaGlobal;
+use core::sync::atomic::{AtomicBool, Ordering};
+use num_traits::ToPrimitive;
 use std::time::{Duration, Instant};
+
+/// Process-wide verbosity switch for the BaoBAB diagnostic command.
+static DEBUG_ENABLED: AtomicBool = AtomicBool::new(false);
+
+fn set_debug(enabled: bool) {
+    DEBUG_ENABLED.store(enabled, Ordering::Relaxed);
+    log::set_max_level(if enabled { log::LevelFilter::Trace } else { log::LevelFilter::Info });
+    log::info!("BaoBAB debug mode {}", if enabled { "ENABLED (Trace)" } else { "DISABLED (Info)" });
+}
 
 const WIDTH: usize = 122;
 const HEIGHT: usize = 250;
@@ -75,8 +85,12 @@ impl EpaperCmd {
     }
 
     fn tx(spi: &mut Spim, data: &[u8]) -> Result<(), &'static str> {
+        log::debug!("EPAPER: SPI TX {} bytes", data.len());
+        let started = Instant::now();
         spi.tx_data_async(data, true, false);
-        Self::wait_tx(spi)
+        let result = Self::wait_tx(spi);
+        log::debug!("EPAPER: SPI TX result={:?}, elapsed={:?}", result, started.elapsed());
+        result
     }
 
     fn command(spi: &mut Spim, iox: &IoxHal, command: u8) -> Result<(), &'static str> {
@@ -91,8 +105,10 @@ impl EpaperCmd {
 
     fn wait_idle(iox: &IoxHal) -> Result<(), &'static str> {
         let start = Instant::now();
+        log::debug!("EPAPER: waiting for BUSY=LOW (timeout {:?})", BUSY_TIMEOUT);
         while iox.get_gpio_pin_value(IoxPort::PB, BUSY_PIN) == IoxValue::High {
             if start.elapsed() > BUSY_TIMEOUT {
+                log::error!("EPAPER: BUSY timeout after {:?}", start.elapsed());
                 return Err("e-Paper BUSY remained HIGH for 30 seconds");
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -151,6 +167,86 @@ impl EpaperCmd {
         Self::wait_idle(iox)
     }
 
+    fn hal_connect() -> Result<xous::CID, String> {
+        let xns = xous_names::XousNames::new();
+        xns.request_connection(SERVER_NAME_BAO1X_HAL)
+            .map_err(|e| format!("HAL service lookup failed: {:?}", e))
+    }
+
+    /// Raw blocking scalar request: report IPC failures instead of using panic-on-error wrappers.
+    /// Clock/reset acknowledgements prove IPC delivery only, not physical peripheral health.
+    fn hal_scalar(cid: xous::CID, opcode: HalOpcode, arg1: usize, arg2: usize) -> Result<u32, String> {
+        let op = opcode.to_usize().ok_or_else(|| format!("Cannot encode HAL opcode {:?}", opcode))?;
+        log::debug!("HAL request {:?}: arg1={} arg2={}", opcode, arg1, arg2);
+        let started = Instant::now();
+        match xous::send_message(cid, xous::Message::new_blocking_scalar(op, arg1, arg2, 0, 0)) {
+            Ok(xous::Result::Scalar5(_, value, _, _, _)) => {
+                log::debug!("HAL reply {:?}: value=0x{:08x}, elapsed={:?}", opcode, value, started.elapsed());
+                Ok(value as u32)
+            }
+            Ok(other) => Err(format!("HAL {:?} returned unexpected reply: {:?}", opcode, other)),
+            Err(error) => Err(format!("HAL {:?} IPC failed after {:?}: {:?}", opcode, started.elapsed(), error)),
+        }
+    }
+
+    fn diagnostics(&self) -> Result<String, String> {
+        let mut report = Vec::new();
+        log::info!("EPAPER-DIAG: starting non-refresh diagnostics");
+        report.push("BaoBAB e-Paper diagnostics (no panel refresh or GPIO writes)".to_string());
+        let cid = Self::hal_connect()?;
+        report.push("PASS: Baochip HAL service connection".to_string());
+
+        for (name, port) in [("PB", IoxPort::PB), ("PC", IoxPort::PC)] {
+            match Self::hal_scalar(cid, HalOpcode::GetGpioBank, port as usize, 0) {
+                Ok(bank) => {
+                    report.push(format!("PASS: GPIO {} bank read = 0x{:04x}", name, bank));
+                    if name == "PB" {
+                        report.push(format!("INFO: PB2/DC={} PB3/RST={} PB4/BUSY={} PB5/PWR={}",
+                            (bank >> DC_PIN) & 1, (bank >> RST_PIN) & 1,
+                            (bank >> BUSY_PIN) & 1, (bank >> PWR_PIN) & 1));
+                    }
+                }
+                Err(e) => report.push(format!("FAIL: GPIO {} bank read: {}", name, e)),
+            }
+        }
+
+        if let Err(e) = Self::hal_scalar(cid, HalOpcode::ConfigureUdmaClock, PeriphId::Spim2 as usize, 1) {
+            report.push(format!("FAIL: SPIM2 clock-enable IPC: {}", e));
+            return Ok(report.join("\\n"));
+        }
+        report.push("PASS: SPIM2 clock-enable IPC acknowledgement".to_string());
+
+        match Self::hal_scalar(cid, HalOpcode::PeriphReset, PeriphId::Spim2 as usize, 0) {
+            Ok(_) => report.push("PASS: SPIM2 reset IPC acknowledgement".to_string()),
+            Err(e) => report.push(format!("FAIL: SPIM2 reset IPC: {}", e)),
+        }
+
+        // Allocate and release the IFRAM-backed SPIM resources, but transmit no bytes.
+        let allocation = unsafe {
+            Spim::new(
+                SpimChannel::Channel2, SPI_HZ, SPIM_CLOCK_HZ,
+                SpimClkPol::LeadingEdgeRise, SpimClkPha::CaptureOnLeading,
+                SpimCs::Cs0, 2, 2, None, FRAME_BYTES, 0, None, None,
+            )
+        };
+        match allocation {
+            Some(spi) => {
+                report.push("PASS: SPIM2 object / DMA buffer allocation".to_string());
+                drop(spi);
+                report.push("PASS: SPIM2 object drop requested (IFRAM cleanup path exercised)".to_string());
+            }
+            None => report.push("FAIL: SPIM2 object / DMA buffer allocation returned None".to_string()),
+        }
+
+        xous::yield_slice();
+        match Self::hal_scalar(cid, HalOpcode::ConfigureUdmaClock, PeriphId::Spim2 as usize, 0) {
+            Ok(_) => report.push("PASS: SPIM2 clock-disable IPC acknowledgement".to_string()),
+            Err(e) => report.push(format!("FAIL: SPIM2 clock-disable IPC: {}", e)),
+        }
+        log::info!("EPAPER-DIAG: completed with {} report lines", report.len());
+        Ok(report.join("\\n"))
+    }
+
     fn run(&self, env: &mut CommonEnv, action: &str) -> Result<String, &'static str> {
         let iox = IoxHal::new();
         Self::setup_pins(&iox);
@@ -163,9 +259,11 @@ impl EpaperCmd {
             return Ok("e-Paper hardware reset completed.".to_string());
         }
 
-        let udma = UdmaGlobal::new();
-        udma.udma_clock_config(PeriphId::Spim2, true);
-        udma.reset(PeriphId::Spim2);
+        let hal = Self::hal_connect().map_err(|_| "Could not connect to Baochip HAL")?;
+        Self::hal_scalar(hal, HalOpcode::ConfigureUdmaClock, PeriphId::Spim2 as usize, 1)
+            .map_err(|_| "Could not enable SPIM2 clock")?;
+        Self::hal_scalar(hal, HalOpcode::PeriphReset, PeriphId::Spim2 as usize, 0)
+            .map_err(|_| "Could not reset SPIM2")?;
 
         // Safety: SPIM2 clock is enabled above. The SPIM object owns a
         // page-backed DMA/command buffer and is dropped before the clock gate
@@ -206,7 +304,10 @@ impl EpaperCmd {
         })();
 
         let _ = env.ticktimer.sleep_ms(1);
-        udma.udma_clock_config(PeriphId::Spim2, false);
+        let clock_off = Self::hal_scalar(hal, HalOpcode::ConfigureUdmaClock, PeriphId::Spim2 as usize, 0);
+        if let Err(error) = clock_off {
+            log::error!("EPAPER: failed to disable SPIM2 clock: {}", error);
+        }
         result
     }
 }
@@ -217,6 +318,21 @@ impl<'a> ShellCmdApi<'a> for EpaperCmd {
     fn process(&mut self, args: String, env: &mut CommonEnv) -> Result<Option<String>, xous::Error> {
         let mut tokens = args.split_whitespace();
         match tokens.next().unwrap_or("") {
+            "debug" => {
+                match tokens.next().unwrap_or("status") {
+                    "on" => { set_debug(true); Ok(Some("Debug enabled globally for this Xous process (Trace log ceiling).".to_string())) }
+                    "off" => { set_debug(false); Ok(Some("Debug disabled (Info log ceiling).".to_string())) }
+                    "status" => Ok(Some(format!("Debug is {}.", if DEBUG_ENABLED.load(Ordering::Relaxed) { "ON" } else { "OFF" }))),
+                    _ => Ok(Some("Usage: epaper debug on|off|status".to_string())),
+                }
+            }
+            "diag" => {
+                if tokens.next().is_some() { return Ok(Some("Usage: epaper diag".to_string())); }
+                match self.diagnostics() {
+                    Ok(report) => Ok(Some(report)),
+                    Err(error) => Ok(Some(format!("e-Paper diagnostic aborted: {}", error))),
+                }
+            }
             "info" => {
                 Ok(Some(format!(
                     "Waveshare 2.13-inch V4; SPI2 mode 0 at {} Hz; frame={} bytes; HAT pins DIN19/SCK23/CS24/DC22/RST11/BUSY18/PWR12; RTC disconnected.",
@@ -226,14 +342,14 @@ impl<'a> ShellCmdApi<'a> for EpaperCmd {
             "reset" | "init" | "white" | "black" => {
                 let action = args.split_whitespace().next().unwrap_or("");
                 if tokens.next().is_some() {
-                    return Ok(Some("Usage: epaper info|reset|init|white|black".to_string()));
+                    return Ok(Some("Usage: epaper info|debug on|off|status|diag|reset|init|white|black".to_string()));
                 }
                 match self.run(env, action) {
                     Ok(message) => Ok(Some(message)),
                     Err(error) => Ok(Some(format!("e-Paper error: {}", error))),
                 }
             }
-            _ => Ok(Some("Usage: epaper info | reset | init | white | black".to_string())),
+            _ => Ok(Some("Usage: epaper info | debug on|off|status | diag | reset | init | white | black".to_string())),
         }
     }
 }
