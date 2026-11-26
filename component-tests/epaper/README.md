@@ -21,14 +21,14 @@ HAT pin numbers are Raspberry Pi 40-pin **physical header numbers**. Dabao pin n
 
 | Function | Baochip pad / peripheral signal | Dabao header | HAT physical pin |
 |---|---|---:|---:|
-| MOSI / EPD DIN | PC1 / SPIM_SD0_B[2] | 12 | 17 |
-| SPI clock / EPD SCK | PC0 / SPIM_CLK_B[2] | 14 | 19 |
-| SPI CS | PC3 / SPIM_CSN0_B[2] | 10 | 21 |
+| MOSI / EPD DIN | PC1 / SPIM_SD0_B[2] | 12 | 19 |
+| SPI clock / EPD SCK | PC0 / SPIM_CLK_B[2] | 14 | 23 |
+| SPI CS | PC3 / SPIM_CSN0_B[2] | 10 | 24 |
 | DC | PB2 / GPIO | 31 | 22 |
 | RESET | PB3 / GPIO | 32 | 11 |
-| BUSY | PB4 / GPIO input | 34 | 16 |
+| BUSY | PB4 / GPIO input | 34 | 18 |
 
-Waveshare routes EPD CS to HAT pins 21 and 24; this plan uses pin 21 and leaves pin 24 unconnected. MISO is not needed for this display.
+The Waveshare Raspberry Pi driver uses BCM GPIO8 for CS, which is physical header pin 24. Physical pin 21 is MISO and is not used by this display. MISO is not needed for this display.
 
 ### Power already wired
 
@@ -165,3 +165,10 @@ epaper black
 The command uses Xous SPIM2, mode 0, MSB-first, initially 1 MHz, and a bounded BUSY wait. It drives DC/RST/BUSY through the Xous IOX HAL and hardware CS through SPIM2 CS0. It does not use the RTC.
 
 **Not yet compiled or hardware-tested.** The configured SPIM source clock is currently set to 50 MHz based on the existing Xous Baochip display backend's configuration constant. Confirm against the active Dabao clock setup and check the compiler output before flashing. If SPI DMA or BUSY polling fails, stop there; do not repeatedly issue refreshes.
+
+
+## Wiring correction — 2026-11-26
+
+An earlier wiring table incorrectly identified the HAT physical header pins for MOSI, SCK, CS and BUSY. The corrected mapping above was derived from Waveshare's own `epdconfig.py` BCM pin definitions and standard Raspberry Pi physical-header numbering.
+
+**Do not use the earlier assignments DIN17 / SCK19 / CS21 / BUSY16.** In particular, physical HAT pin 17 is a 3.3 V supply pin, not MOSI. Verify the corrected wiring with power disconnected before reconnecting USB.
