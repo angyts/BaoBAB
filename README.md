@@ -73,3 +73,7 @@ The current audio investigation and hardware test ledger are maintained in [comp
 - [ENGINEERING_RESEARCH.md](component-tests/bio-audio/ENGINEERING_RESEARCH.md) — BIO timing, other engineers' BIO/PIO implementations, MAX98357A and speaker research.
 - [UDMA_I2S_AND_PWM_AUDIO_RESEARCH.md](component-tests/bio-audio/UDMA_I2S_AND_PWM_AUDIO_RESEARCH.md) — dedicated I2S RTL, Xous driver gaps, Dabao pin routing and Armstrong Subero's PWM audio approach.
 - [component-tests/bio-audio/README.md](component-tests/bio-audio/README.md) — experimental source, installation notes and reported bench results.
+
+## E-paper display bring-up
+
+Initial Waveshare 2.13-inch e-Paper HAT+ V4 test materials are in [component-tests/epaper/README.md](component-tests/epaper/README.md), with the V4 protocol notes and Xous SPI2 plan alongside them. The first Xous console command source and installer are included, but have not yet been compiled or run on hardware.
