@@ -156,6 +156,13 @@ impl EpaperCmd {
         Self::setup_pins(&iox);
         std::thread::sleep(Duration::from_millis(100));
 
+        // A hardware reset is GPIO-only. Do not allocate a DMA/IFRAM buffer
+        // for this command; it must remain usable even when SPI is not ready.
+        if action == "reset" {
+            Self::reset(&iox);
+            return Ok("e-Paper hardware reset completed.".to_string());
+        }
+
         let udma = UdmaGlobal::new();
         udma.udma_clock_config(PeriphId::Spim2, true);
         udma.reset(PeriphId::Spim2);
@@ -183,10 +190,6 @@ impl EpaperCmd {
             }.ok_or("Could not allocate SPIM DMA buffer")?;
 
             let result = match action {
-                "reset" => {
-                    Self::reset(&iox);
-                    Ok("e-Paper hardware reset completed.".to_string())
-                }
                 "init" => {
                     Self::initialise(&mut spi, &iox)?;
                     Ok("Waveshare V4 controller initialised; BUSY is LOW.".to_string())
