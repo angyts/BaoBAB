@@ -289,3 +289,7 @@ Recommended next validation:
 3. Once available, capture BCLK, LRCLK, DIN at the MAX98357A inputs and check 3.072 MHz BCLK (for 48 kHz, 32-bit/channel slots), 48 kHz LRCLK, one-bit I2S delay, 32 BCLKs per channel, and DIN setup/hold.
 4. Only after waveform validation, re-test the amplifier at a low fixed amplitude.
 
+
+## Engineering research
+
+Additional comparative research on Baochip BIO examples, RP2040 PIO I2S implementations, current transmitter timing, MAX98357A requirements, and the four-terminal speaker observation is documented in [ENGINEERING_RESEARCH.md](ENGINEERING_RESEARCH.md). The research distinguishes confirmed facts from hypotheses and recommended next tests.
