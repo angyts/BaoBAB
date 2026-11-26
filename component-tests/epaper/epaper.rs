@@ -14,9 +14,26 @@ use std::time::{Duration, Instant};
 static DEBUG_ENABLED: AtomicBool = AtomicBool::new(false);
 
 fn set_debug(enabled: bool) {
+    // Do not change the process-wide log filter: that would enable noisy
+    // Trace/Debug messages from the shell (including every keypress).
     DEBUG_ENABLED.store(enabled, Ordering::Relaxed);
-    log::set_max_level(if enabled { log::LevelFilter::Trace } else { log::LevelFilter::Info });
-    log::info!("BaoBAB debug mode {}", if enabled { "ENABLED (Trace)" } else { "DISABLED (Info)" });
+    log::info!("BaoBAB e-Paper debug mode {}", if enabled { "ENABLED" } else { "DISABLED" });
+}
+
+macro_rules! ep_debug {
+    ($($arg:tt)*) => {{
+        if DEBUG_ENABLED.load(Ordering::Relaxed) {
+            log::info!("[EPAPER DEBUG] {}", format_args!($($arg)*));
+        }
+    }};
+}
+
+macro_rules! ep_trace {
+    ($($arg:tt)*) => {{
+        if DEBUG_ENABLED.load(Ordering::Relaxed) {
+            log::info!("[EPAPER TRACE] {}", format_args!($($arg)*));
+        }
+    }};
 }
 
 const WIDTH: usize = 122;
@@ -76,7 +93,7 @@ impl EpaperCmd {
 
     fn wait_tx(spi: &Spim) -> Result<(), &'static str> {
         let start = Instant::now();
-        log::trace!("EPAPER: waiting for UDMA TX completion");
+        ep_trace!("EPAPER: waiting for UDMA TX completion");
         while spi.is_tx_busy() {
             if start.elapsed() > TX_TIMEOUT {
                 return Err("SPI TX timed out");
@@ -87,29 +104,29 @@ impl EpaperCmd {
     }
 
     fn tx(spi: &mut Spim, data: &[u8]) -> Result<(), &'static str> {
-        log::debug!("EPAPER: SPI TX {} bytes", data.len());
+        ep_debug!("EPAPER: SPI TX {} bytes", data.len());
         let started = Instant::now();
         spi.tx_data_async(data, true, false);
         let result = Self::wait_tx(spi);
-        log::debug!("EPAPER: SPI TX result={:?}, elapsed={:?}", result, started.elapsed());
+        ep_debug!("EPAPER: SPI TX result={:?}, elapsed={:?}", result, started.elapsed());
         result
     }
 
     fn command(spi: &mut Spim, iox: &IoxHal, command: u8) -> Result<(), &'static str> {
-        log::trace!("EPAPER: command 0x{:02x}", command);
+        ep_trace!("EPAPER: command 0x{:02x}", command);
         iox.set_gpio_pin_value(IoxPort::PB, DC_PIN, IoxValue::Low);
         Self::tx(spi, &[command])
     }
 
     fn data(spi: &mut Spim, iox: &IoxHal, data: &[u8]) -> Result<(), &'static str> {
-        log::trace!("EPAPER: data transfer {} bytes", data.len());
+        ep_trace!("EPAPER: data transfer {} bytes", data.len());
         iox.set_gpio_pin_value(IoxPort::PB, DC_PIN, IoxValue::High);
         Self::tx(spi, data)
     }
 
     fn wait_idle(iox: &IoxHal) -> Result<(), &'static str> {
         let start = Instant::now();
-        log::debug!("EPAPER: waiting for BUSY=LOW (timeout {:?})", BUSY_TIMEOUT);
+        ep_debug!("EPAPER: waiting for BUSY=LOW (timeout {:?})", BUSY_TIMEOUT);
         while iox.get_gpio_pin_value(IoxPort::PB, BUSY_PIN) == IoxValue::High {
             if start.elapsed() > BUSY_TIMEOUT {
                 log::error!("EPAPER: BUSY timeout after {:?}", start.elapsed());
@@ -183,11 +200,11 @@ impl EpaperCmd {
     /// Clock/reset acknowledgements prove IPC delivery only, not physical peripheral health.
     fn hal_scalar(cid: xous::CID, opcode: HalOpcode, arg1: usize, arg2: usize) -> Result<u32, String> {
         let op = opcode.to_usize().ok_or_else(|| format!("Cannot encode HAL opcode {:?}", opcode))?;
-        log::debug!("HAL request {:?}: arg1={} arg2={}", opcode, arg1, arg2);
+        ep_debug!("HAL request {:?}: arg1={} arg2={}", opcode, arg1, arg2);
         let started = Instant::now();
         match xous::send_message(cid, xous::Message::new_blocking_scalar(op, arg1, arg2, 0, 0)) {
             Ok(xous::Result::Scalar5(_, value, _, _, _)) => {
-                log::debug!("HAL reply {:?}: value=0x{:08x}, elapsed={:?}", opcode, value, started.elapsed());
+                ep_debug!("HAL reply {:?}: value=0x{:08x}, elapsed={:?}", opcode, value, started.elapsed());
                 Ok(value as u32)
             }
             Ok(other) => Err(format!("HAL {:?} returned unexpected reply: {:?}", opcode, other)),
