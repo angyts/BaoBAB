@@ -187,3 +187,32 @@ Connect Dabao PB5 / physical header pin 35 to HAT physical pin 12. PB5 is expose
 Source: https://github.com/waveshareteam/e-Paper/blob/master/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epdconfig.py
 
 Do not flash the earlier command revision that omitted PWR. Update the local `epaper.rs` from the corrected repository version first.
+
+
+## HAL panic found during first `epaper reset` — 2026-11-26
+
+Observed on hardware:
+```text
+PANIC in PID 7:
+thread '<unnamed>' panicked at services/bao1x-hal-service/src/main.rs:353:57:
+range start index 4096 out of range for slice of length 32
+```
+
+Source trace:
+- `try_alloc()` stores IFRAM allocations as 4-KiB page entries and returns the start offset as **bytes** (`start * 4096`).
+- `IframRange::Drop` sends that physical byte offset to the HAL's `UnmapIfram` handler.
+- The old unmap handler subtracts the bank base (still a byte offset) but uses that value directly as an index into the page-entry vector.
+- An allocation starting at page 1 therefore gives byte offset 4096 and attempts to slice a 32-entry vector at index 4096. This exactly matches the panic.
+
+The repair is to retain the byte offset for address arithmetic, assert page alignment, and divide by 4096 before indexing the allocator table. The patch installer is:
+
+```bash
+curl -fL https://raw.githubusercontent.com/angyts/BaoBAB/8f46f26459c5f2c22c545828a2d094df5708ec6a/component-tests/epaper/fix_xous_ifram_unmap.py -o /tmp/fix_xous_ifram_unmap.py
+python3 /tmp/fix_xous_ifram_unmap.py "$PWD"
+```
+
+Then inspect `git diff -- services/bao1x-hal-service/src/main.rs`, run `git diff --check`, rebuild and reboot before retesting.
+
+The e-Paper `reset` action has also been changed to be GPIO-only and no longer allocates SPIM/IFRAM resources. This separates a panel reset test from DMA allocation/cleanup.
+
+**Do not retry e-Paper init/refresh against the unpatched HAL.** The reset panic is a HAL IFRAM bookkeeping bug, not evidence that the panel or SPI wiring is defective.
