@@ -360,3 +360,40 @@ No change to existing BaoBAB firmware or user wiring is implied by this note.
 - uDMA HAL module: https://github.com/betrusted-io/xous-core/blob/main/libs/bao1x-hal/src/udma/mod.rs
 - uDMA I2C driver (useful style/reference for a new driver): https://github.com/betrusted-io/xous-core/blob/main/libs/bao1x-hal/src/udma/i2c.rs
 
+
+
+## 9. Dabao board-level pinout cross-check (important practical constraint)
+
+Source inspected:
+- Dabao pin list: https://github.com/baochip/dabao/blob/main/docs/pinout/pins.csv
+- Pinout documentation: https://github.com/baochip/dabao/tree/main/docs/pinout
+- SoC pad mux: https://github.com/baochip/baochip-1x/blob/main/rtl/modules/ifsub/rtl/soc_ifsub.sv
+
+### PWM is physically exposed
+
+The Dabao pin CSV confirms:
+- PB1 is physical header pin **29**.
+- Its alternate function is **PWM1 channel 1**.
+- PB1 is therefore a direct match for Armstrong's public `examples/pwm/pwm.c` wiring comment, which says PB1/header pin 29 and uses PWM slice 1/channel 1.
+
+This makes Armstrong's PWM output topology demonstrably practical on the Dabao headers without relying on BIO pins.
+
+### I2S master output is not listed on the current Dabao header
+
+The SoC interface RTL contains dedicated I2S master pads (`i2sm_sd`, `i2sm_ws`, `i2sm_sck`). In `soc_ifsub.sv`, the pad mux connects the I2S master signals to the D-port pad mux routes:
+- D10 AF1 -> `i2sm_sd` (master serial data).
+- D11 AF1 -> `i2sm_ws` (word-select / LRCLK).
+- D12 AF1 -> `i2sm_sck` (serial bit clock).
+
+However, the Dabao board's published `pins.csv` lists external GPIO/header signals from PC13 down through PB pins and does not list any PD/D10-D12 header pads. The current public physical header pinout therefore does **not** provide an identified header connection for the I2S master trio.
+
+This does not prove the pads are unbonded or impossible to reach through some alternate test point/revision; it does mean we cannot responsibly assume the current Dabao board exposes them for breadboard wiring. Check the package pin map, board schematic/PCB and any unpopulated test points before attempting a UDMA I2S hardware driver for the external MAX98357A.
+
+### Updated recommendation
+
+Given the user's current Dabao board and the MAX98357A breakout:
+- The PWM option has a known exposed pin (PB1 / header pin 29), but requires an **analogue-input amplifier**, not the MAX98357A.
+- The UDMA I2S TX block exists in silicon RTL, but its master pins are not shown on the current Dabao external header pin list. A Rust driver alone would not solve the physical access problem.
+- The existing BIO I2S path still uses the current accessible pins PC8/PC10/PC11 and remains compatible with the MAX98357A electrically, subject to fixing/validating the software waveform.
+
+Therefore, the best immediate route depends on whether the goal is to use the hardware already on the bench (keep MAX98357A -> validate/rework BIO I2S) or to try Armstrong's simpler analogue-output approach (PWM on PB1 -> RC filter -> obtain an analogue-input amplifier). Do not change the current soldering or wiring based only on the UDMA register map.
