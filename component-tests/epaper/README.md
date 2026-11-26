@@ -27,6 +27,7 @@ HAT pin numbers are Raspberry Pi 40-pin **physical header numbers**. Dabao pin n
 | DC | PB2 / GPIO | 31 | 22 |
 | RESET | PB3 / GPIO | 32 | 11 |
 | BUSY | PB4 / GPIO input | 34 | 18 |
+| Panel power enable (PWR) | PB5 / GPIO output, HIGH to enable | 35 | 12 (BCM GPIO18) |
 
 The Waveshare Raspberry Pi driver uses BCM GPIO8 for CS, which is physical header pin 24. Physical pin 21 is MISO and is not used by this display. MISO is not needed for this display.
 
@@ -172,3 +173,17 @@ The command uses Xous SPIM2, mode 0, MSB-first, initially 1 MHz, and a bounded B
 An earlier wiring table incorrectly identified the HAT physical header pins for MOSI, SCK, CS and BUSY. The corrected mapping above was derived from Waveshare's own `epdconfig.py` BCM pin definitions and standard Raspberry Pi physical-header numbering.
 
 **Do not use the earlier assignments DIN17 / SCK19 / CS21 / BUSY16.** In particular, physical HAT pin 17 is a 3.3 V supply pin, not MOSI. Verify the corrected wiring with power disconnected before reconnecting USB.
+
+
+## Required panel power-enable line — 2026-11-26
+
+A review of Waveshare's upstream `epdconfig.py` found a separate power-enable GPIO:
+- Raspberry Pi BCM GPIO18, physical HAT header pin 12.
+- The official driver calls `GPIO_PWR_PIN.on()` in `module_init()` before opening SPI.
+- Therefore this is not optional just because 3.3 V and 5 V rails are present.
+
+Connect Dabao PB5 / physical header pin 35 to HAT physical pin 12. PB5 is exposed on the Dabao header and has no alternate peripheral function listed in the published pin CSV. The e-Paper console test configures PB5 as GPIO output and drives it HIGH before reset/initialisation.
+
+Source: https://github.com/waveshareteam/e-Paper/blob/master/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epdconfig.py
+
+Do not flash the earlier command revision that omitted PWR. Update the local `epaper.rs` from the corrected repository version first.
