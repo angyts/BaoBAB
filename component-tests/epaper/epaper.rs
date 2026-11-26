@@ -157,45 +157,46 @@ impl EpaperCmd {
         // Safety: SPIM2 clock is enabled above. The SPIM object owns a
         // page-backed DMA/command buffer and is dropped before the clock gate
         // is disabled below.
-        let mut spi = unsafe {
-            Spim::new(
-                SpimChannel::Channel2,
-                SPI_HZ,
-                SPIM_CLOCK_HZ,
-                SpimClkPol::LeadingEdgeRise,
-                SpimClkPha::CaptureOnLeading,
-                SpimCs::Cs0,
-                2,
-                2,
-                None,
-                FRAME_BYTES,
-                0,
-                None,
-                None,
-            )
-        }.ok_or("Could not allocate SPIM DMA buffer")?;
+        let result = (|| -> Result<String, &'static str> {
+            let mut spi = unsafe {
+                Spim::new(
+                    SpimChannel::Channel2,
+                    SPI_HZ,
+                    SPIM_CLOCK_HZ,
+                    SpimClkPol::LeadingEdgeRise,
+                    SpimClkPha::CaptureOnLeading,
+                    SpimCs::Cs0,
+                    2,
+                    2,
+                    None,
+                    FRAME_BYTES,
+                    0,
+                    None,
+                    None,
+                )
+            }.ok_or("Could not allocate SPIM DMA buffer")?;
 
-        let result = match action {
-            "reset" => {
-                Self::reset(&iox);
-                Ok("e-Paper hardware reset completed.".to_string())
-            }
-            "init" => {
-                Self::initialise(&mut spi, &iox)?;
-                Ok("Waveshare V4 controller initialised; BUSY is LOW.".to_string())
-            }
-            "white" | "black" => {
-                Self::initialise(&mut spi, &iox)?;
-                Self::refresh(&mut spi, &iox, if action == "white" { 0xFF } else { 0x00 })?;
-                Ok(format!("Waveshare V4 full-screen {} refresh completed.", action))
-            }
-            _ => Err("unknown action"),
-        };
+            let result = match action {
+                "reset" => {
+                    Self::reset(&iox);
+                    Ok("e-Paper hardware reset completed.".to_string())
+                }
+                "init" => {
+                    Self::initialise(&mut spi, &iox)?;
+                    Ok("Waveshare V4 controller initialised; BUSY is LOW.".to_string())
+                }
+                "white" | "black" => {
+                    Self::initialise(&mut spi, &iox)?;
+                    Self::refresh(&mut spi, &iox, if action == "white" { 0xFF } else { 0x00 })?;
+                    Ok(format!("Waveshare V4 full-screen {} refresh completed.", action))
+                }
+                _ => Err("unknown action"),
+            };
+            drop(spi);
+            result
+        })();
 
-        // Keep the timer service referenced for parity with the command
-        // environment and to make the operation's blocking nature explicit.
         let _ = env.ticktimer.sleep_ms(1);
-        drop(spi);
         udma.udma_clock_config(PeriphId::Spim2, false);
         result
     }
