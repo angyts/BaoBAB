@@ -212,7 +212,7 @@ impl EpaperCmd {
 
         if let Err(e) = Self::hal_scalar(cid, HalOpcode::ConfigureUdmaClock, PeriphId::Spim2 as usize, 1) {
             report.push(format!("FAIL: SPIM2 clock-enable IPC: {}", e));
-            return Ok(report.join("\\n"));
+            return Ok(report.join("\n"));
         }
         report.push("PASS: SPIM2 clock-enable IPC acknowledgement".to_string());
 
@@ -244,7 +244,7 @@ impl EpaperCmd {
             Err(e) => report.push(format!("FAIL: SPIM2 clock-disable IPC: {}", e)),
         }
         log::info!("EPAPER-DIAG: completed with {} report lines", report.len());
-        Ok(report.join("\\n"))
+        Ok(report.join("\n"))
     }
 
     fn run(&self, env: &mut CommonEnv, action: &str) -> Result<String, &'static str> {
