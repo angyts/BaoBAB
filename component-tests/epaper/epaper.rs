@@ -24,7 +24,7 @@ const SPIM_CLOCK_HZ: u32 = 50_000_000;
 
 const DC_PIN: u8 = 2;   // PB2 / Dabao header 31 / HAT pin 22
 const RST_PIN: u8 = 3;  // PB3 / Dabao header 32 / HAT pin 11
-const BUSY_PIN: u8 = 4; // PB4 / Dabao header 34 / HAT pin 16
+const BUSY_PIN: u8 = 4; // PB4 / Dabao header 34 / HAT pin 18
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 const TX_TIMEOUT: Duration = Duration::from_secs(5);
@@ -210,7 +210,7 @@ impl<'a> ShellCmdApi<'a> for EpaperCmd {
         match tokens.next().unwrap_or("") {
             "info" => {
                 Ok(Some(format!(
-                    "Waveshare 2.13-inch V4; SPI2 mode 0 at {} Hz; frame={} bytes; HAT pins DIN17/SCK19/CS21/DC22/RST11/BUSY16; RTC disconnected.",
+                    "Waveshare 2.13-inch V4; SPI2 mode 0 at {} Hz; frame={} bytes; HAT pins DIN19/SCK23/CS24/DC22/RST11/BUSY18; RTC disconnected.",
                     SPI_HZ, FRAME_BYTES
                 )))
             }
