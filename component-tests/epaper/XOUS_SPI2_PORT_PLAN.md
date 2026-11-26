@@ -11,6 +11,7 @@
 | PB2 | GPIO | 31 | 22 | DC |
 | PB3 | GPIO | 32 | 11 | RESET |
 | PB4 | GPIO input | 34 | 18 | BUSY |
+| PB5 | GPIO output, HIGH enables panel power | 35 | 12 (BCM GPIO18) | PWR enable |
 
 SPI signals are on SPIM channel 2, AF2. GPIO lines remain normal GPIO.
 
@@ -61,3 +62,8 @@ The SPI controller and GPIO service must own these pads consistently. Do not set
 ## Wiring correction — 2026-11-26
 
 Use the corrected HAT physical header pins: MOSI 19, SCK 23, CS 24, DC 22, RESET 11, BUSY 18. The earlier values 17/19/21/16 were wrong. HAT physical pin 17 is 3.3 V; never connect the Dabao MOSI output to it. Keep the system unpowered while correcting the jumper wires.
+
+
+## Waveshare panel power enable
+
+The Waveshare upstream Raspberry Pi V4 configuration defines `PWR_PIN = 18` (BCM numbering) and asserts it HIGH in `module_init()`. BCM GPIO18 is physical Raspberry Pi HAT pin 12. The Dabao connection is PB5 / physical header pin 35. The console command must drive this pin HIGH before resetting the controller.
