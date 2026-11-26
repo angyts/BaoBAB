@@ -29,7 +29,7 @@ array_anchor = "            &mut i2cdetect_cmd,"
 if "mod epaper;" in registry_text or "&mut epaper_cmd" in registry_text:
     raise SystemExit("An epaper command is already registered; inspect manually.")
 if registry_text.count(module_anchor) != 1:
-    raise SystemExit("Unexpected cmds.rs module layout; expected one bio module declaration.")
+    raise SystemExit("Unexpected cmds.rs module layout; expected one i2cdetect module declaration.")
 if registry_text.count(dispatch_anchor) != 1:
     raise SystemExit("Unexpected cmds.rs dispatch layout; expected i2cdetect command declaration.")
 if registry_text.count(array_anchor) != 1:
