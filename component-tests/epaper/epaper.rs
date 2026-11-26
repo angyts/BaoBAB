@@ -2,11 +2,10 @@ use crate::{CommonEnv, ShellCmdApi};
 use String;
 
 use bao1x_api::{
-    IoGpio, IoSetup, IoxDir, IoxDriveStrength, IoxEnable, IoxFunction, IoxHal, IoxPort, IoxValue,
+    IoSetup, IoxDir, IoxDriveStrength, IoxEnable, IoxFunction, IoxHal, IoxPort, IoxValue,
+    PeriphId, SpimChannel,
 };
-use bao1x_hal::udma::{
-    PeriphId, Spim, SpimChannel, SpimClkPha, SpimClkPol, SpimCs,
-};
+use bao1x_hal::udma::{Spim, SpimClkPha, SpimClkPol, SpimCs};
 use bao1x_hal_service::UdmaGlobal;
 use std::time::{Duration, Instant};
 
