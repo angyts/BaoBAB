@@ -138,3 +138,30 @@ The first test must not access the RTC, use partial refresh, or add fonts/graphi
 - No SPI initialisation or display refresh result yet reported.
 
 This folder documents the implementation plan; it is not a claim that the display driver is already implemented or working.
+
+
+## Initial Xous console test source
+
+The first command implementation is in `epaper.rs`. Install it into a Xous checkout with:
+
+```bash
+python3 /path/to/BaoBAB/component-tests/epaper/install.py "$PWD"
+git diff --check
+git status --short
+git diff
+cargo xtask dabao dabao-console
+```
+
+After reviewing the diff and a successful build, flash the image. Then use:
+
+```text
+epaper info
+epaper reset
+epaper init
+epaper white
+epaper black
+```
+
+The command uses Xous SPIM2, mode 0, MSB-first, initially 1 MHz, and a bounded BUSY wait. It drives DC/RST/BUSY through the Xous IOX HAL and hardware CS through SPIM2 CS0. It does not use the RTC.
+
+**Not yet compiled or hardware-tested.** The configured SPIM source clock is currently set to 50 MHz based on the existing Xous Baochip display backend's configuration constant. Confirm against the active Dabao clock setup and check the compiler output before flashing. If SPI DMA or BUSY polling fails, stop there; do not repeatedly issue refreshes.
