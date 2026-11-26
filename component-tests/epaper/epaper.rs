@@ -44,6 +44,7 @@ impl EpaperCmd {
     pub fn new() -> Self { Self }
 
     fn setup_pins(iox: &IoxHal) {
+        log::info!("EPAPER: configuring SPI2 and panel GPIO pins");
         // SPI2 alternate-function B pins: PC0=CLK, PC1=MOSI, PC3=CS0.
         for pin in [0, 1, 3] {
             iox.setup_pin(
@@ -75,6 +76,7 @@ impl EpaperCmd {
 
     fn wait_tx(spi: &Spim) -> Result<(), &'static str> {
         let start = Instant::now();
+        log::trace!("EPAPER: waiting for UDMA TX completion");
         while spi.is_tx_busy() {
             if start.elapsed() > TX_TIMEOUT {
                 return Err("SPI TX timed out");
@@ -94,11 +96,13 @@ impl EpaperCmd {
     }
 
     fn command(spi: &mut Spim, iox: &IoxHal, command: u8) -> Result<(), &'static str> {
+        log::trace!("EPAPER: command 0x{:02x}", command);
         iox.set_gpio_pin_value(IoxPort::PB, DC_PIN, IoxValue::Low);
         Self::tx(spi, &[command])
     }
 
     fn data(spi: &mut Spim, iox: &IoxHal, data: &[u8]) -> Result<(), &'static str> {
+        log::trace!("EPAPER: data transfer {} bytes", data.len());
         iox.set_gpio_pin_value(IoxPort::PB, DC_PIN, IoxValue::High);
         Self::tx(spi, data)
     }
@@ -117,6 +121,7 @@ impl EpaperCmd {
     }
 
     fn reset(iox: &IoxHal) {
+        log::info!("EPAPER: GPIO hardware reset sequence");
         iox.set_gpio_pin_value(IoxPort::PB, RST_PIN, IoxValue::High);
         std::thread::sleep(Duration::from_millis(20));
         iox.set_gpio_pin_value(IoxPort::PB, RST_PIN, IoxValue::Low);
@@ -248,6 +253,8 @@ impl EpaperCmd {
     }
 
     fn run(&self, env: &mut CommonEnv, action: &str) -> Result<String, &'static str> {
+        let started = Instant::now();
+        log::info!("EPAPER: action '{}' starting", action);
         let iox = IoxHal::new();
         Self::setup_pins(&iox);
         std::thread::sleep(Duration::from_millis(100));
@@ -308,6 +315,7 @@ impl EpaperCmd {
         if let Err(error) = clock_off {
             log::error!("EPAPER: failed to disable SPIM2 clock: {}", error);
         }
+        log::info!("EPAPER: action '{}' finished success={} elapsed={:?}", action, result.is_ok(), started.elapsed());
         result
     }
 }
