@@ -8,9 +8,9 @@
 
 1. The public `ArmstrongSubero/dabao-sdk` repository contains useful Baochip BIO reference programs: a measured 100 kHz square-wave output, divider tests, FIFO tests, and GPIO pad-readback tests. Its public examples tree does **not** currently show a ready-made I2S/BIO driver.
 2. The public `earlephilhower/arduino-pico` I2S implementation is a strong architecture reference. It uses RP2040 PIO side-set to drive BCLK and word-select in a fixed instruction cadence while the output shift register serialises data. It is not directly portable to Baochip BIO, but its timing discipline is relevant.
-3. A source audit confirms that BaoBAB's current `i2s_audio_kernel.rs` has data-dependent branch paths inside each bit cell and computes reported BCLK/LRCLK values as if two quantum waits alone set the entire period. They do not: ordinary BIO instructions between waits also consume core cycles. The reported values are therefore nominal estimates, not actual measured output frequencies. This requires correction before calling the output clock validated.
+3. A source audit confirms that BaoBAB's current `i2s_audio_kernel.rs` has data-dependent branch paths inside each bit cell and computes reported BCLK/LRCLK values as if two quantum waits alone set the entire period. They do not: ordinary BIO instructions between waits also consume core cycles. The reported values are therefore nominal estimates, not actual measured output frequencies. This requires correction before calling the output clock validated. However, do not assume it alone explains total silence: at a nominal ~3 MHz BCLK, an extra BIO instruction cycle is only around a nanosecond at a 700 MHz core clock, and the MAX98357A's minimum BCLK pulse widths are 15 ns. The actual phase widths and clock rate must be measured; branch skew may be a quality/timing defect without being severe enough to prevent all audio.
 4. The same MAX98357A timing specification calls for minimum 15 ns BCLK high and low times, 10 ns data and LRCLK setup/hold, and standard-I2S one-BCLK delay. A logic-analyser or oscilloscope capture at the amplifier input is now the decisive test.
-5. A public teardown describes a miniature 8 ohm / 0.25 W speaker with four rear terminals, where only the two outer terminals are used. That is a close match to the user's description, but it does not identify the user's exact speaker. The user's 8.6 ohm DC reading is compatible with an 8 ohm nominal single-coil speaker.
+5. A public teardown describes a miniature 8 ohm / 0.25 W speaker with four rear terminals, where only the two outer terminals are used. That is a very close match to the user's description, but it does not identify the user's exact speaker. The user's 8.6 ohm DC reading is compatible with an 8 ohm nominal speaker. Because the matching article labels its unit 0.25 W, the user's earlier assumed 0.5 W rating should be treated as unverified until the speaker itself is inspected.
 
 No firmware was changed by this research note. Do not increase the test amplitude further until the speaker rating and I2S waveform are verified.
 
@@ -246,3 +246,17 @@ Look for a marking on the speaker back such as `8Ω 0.25W`, `8Ω 0.5W`, or a par
 7. Only after the serial protocol is measured and validated, try the 440 Hz tone again.
 8. If valid I2S is present at the IC and the speaker is confirmed wired to OUT+/OUT−, investigate the MAX98357A breakout's SD_MODE/Gain resistor configuration and supply/analog output.
 
+
+
+## 6. Caution about the current diagnosis
+
+The source-level timing audit establishes that the console's reported output clocks are not exact measured pin frequencies. It does **not** establish that BIO instruction overhead is the reason for silence. The MAX98357A minimum BCLK high/low pulse width is 15 ns, while a ~3 MHz clock has a nominal half-period around 160 ns. A few extra BIO instruction cycles may perturb the frequency and duty cycle but could still satisfy the amplifier's timing limits. A measured waveform is needed before deciding whether the bit-cell needs a total redesign or merely accurate clock reporting/tuning.
+
+The following root causes remain open:
+- actual BCLK/LRCLK/DIN timing at the amplifier inputs;
+- MAX98357A variant and SD_MODE threshold margin;
+- breakout-board GAIN/SD_MODE resistor arrangement;
+- speaker identity/rating/terminal pinout;
+- analog output path and speaker connection.
+
+The next most useful test when the user resumes is not another amplitude increase. It is a three-channel scope/logic-analyser capture at the MAX98357A input header (DIN, BCLK, LRCLK) during one 250 ms tone, alongside a check of the exact IC marking and four speaker terminal resistance matrix.
