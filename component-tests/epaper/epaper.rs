@@ -173,7 +173,8 @@ impl EpaperCmd {
     }
 
     fn hal_connect() -> Result<xous::CID, String> {
-        let xns = xous_names::XousNames::new();
+        let xns = xous_names::XousNames::new()
+            .map_err(|e| format!("Xous names service initialization failed: {:?}", e))?;
         xns.request_connection(SERVER_NAME_BAO1X_HAL)
             .map_err(|e| format!("HAL service lookup failed: {:?}", e))
     }
