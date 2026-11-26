@@ -1,6 +1,6 @@
 # BIO-powered I2S audio experiment (Xous / Dabao)
 
-**Status:** clock-only BIO test passed on hardware; BIO GPIO readback passed 4/4; the 440 Hz sample/FIFO path completed but no audible sound was heard. Static line-hold diagnostic is committed but not yet compiled or run.
+**Status (2026-11-26):** clock-only BIO test completed; GPIO pad readback passed 4/4; user reports all three static far-end line-hold voltage checks passed; BIO 440 Hz PCM/FIFO path completed and released resources, but user heard no audible sound at PCM amplitudes 512, 1024, 2048 and 4096. Dynamic I2S waveforms have not been measured. See [RESEARCH_SUMMARY.md](RESEARCH_SUMMARY.md) for the consolidated test ledger and architecture decisions.
 
 ## 1. Verified wiring
 
@@ -36,7 +36,7 @@ These values came from the configured BIO divider calculation, not an oscillosco
 
 ## 3. 440 Hz tone implementation
 
-The new prototype uses standard I2S with 32-bit channel slots carrying 16-bit PCM:
+The new prototype attempts standard I2S with 32-bit channel slots carrying 16-bit PCM:
 - Target BIO quantum: 6.144 MHz.
 - Target BCLK: 3.072 MHz.
 - Target LRCLK: 48 kHz.
@@ -129,7 +129,7 @@ Before running `i2sclock tone440`:
 
 - The original audio transmitter compiled and was flashed, but its first tone command failed with `Timeout(\"BIO TX FIFO did not drain\")`. The next revision adds a correct I2S delay bit, preloads three frames before BIO starts, corrects the sample MSB bit mask, and reports FIFO level on timeout. This revision has not yet been compiled or run.
 - BIO FIFO underrun behavior during audio streaming has not been measured. The kernel waits at frame boundaries for sample words; host-side FIFO refill timing may cause clock pauses if the producer cannot keep up.
-- The target quantum and actual frequencies must be checked on hardware.
+- The target quantum and actual frequencies must be checked on hardware. Console-reported BCLK/LRCLK values are divider-derived estimates, not measurements.
 - No separate MCLK is required by MAX98357A.
 - The first tone is a bring-up test, not a general-purpose PCM player.
 - The exact breakout variant and its onboard GAIN/SD_MODE resistor network should be verified against its vendor schematic if the first test is silent.
@@ -293,3 +293,13 @@ Recommended next validation:
 ## Engineering research
 
 Additional comparative research on Baochip BIO examples, RP2040 PIO I2S implementations, current transmitter timing, MAX98357A requirements, and the four-terminal speaker observation is documented in [ENGINEERING_RESEARCH.md](ENGINEERING_RESEARCH.md). The research distinguishes confirmed facts from hypotheses and recommended next tests.
+
+
+## 14. Consolidated current status
+
+The full test ledger, interpretation and decisions are maintained in [RESEARCH_SUMMARY.md](RESEARCH_SUMMARY.md). Additional comparative material:
+- [ENGINEERING_RESEARCH.md](ENGINEERING_RESEARCH.md): BIO examples from Armstrong Subero, RP2040 PIO timing design, BIO serializer timing audit, speaker terminals and MAX98357A.
+- [UDMA_I2S_AND_PWM_AUDIO_RESEARCH.md](UDMA_I2S_AND_PWM_AUDIO_RESEARCH.md): UDMA I2S RTL, register map, current Xous HAL status, physical pinout cross-check and Armstrong's PWM analogue-output approach.
+
+The user's reports establish that the static wiring and BIO FIFO transfer work, but do not establish valid I2S waveforms or successful amplifier output. No more amplitude increase is recommended until the live signals are measured.
+
