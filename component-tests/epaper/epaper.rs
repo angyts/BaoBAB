@@ -8,7 +8,6 @@ use bao1x_hal::udma::{
     PeriphId, Spim, SpimChannel, SpimClkPha, SpimClkPol, SpimCs,
 };
 use bao1x_hal_service::UdmaGlobal;
-use core::fmt::Write;
 use std::time::{Duration, Instant};
 
 const WIDTH: usize = 122;
@@ -25,6 +24,7 @@ const SPIM_CLOCK_HZ: u32 = 50_000_000;
 const DC_PIN: u8 = 2;   // PB2 / Dabao header 31 / HAT pin 22
 const RST_PIN: u8 = 3;  // PB3 / Dabao header 32 / HAT pin 11
 const BUSY_PIN: u8 = 4; // PB4 / Dabao header 34 / HAT pin 18
+const PWR_PIN: u8 = 5; // PB5 / Dabao header 35 / HAT pin 12 (BCM GPIO18)
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 const TX_TIMEOUT: Duration = Duration::from_secs(5);
@@ -54,6 +54,12 @@ impl EpaperCmd {
             IoxPort::PB, BUSY_PIN, Some(IoxDir::Input), Some(IoxFunction::Gpio),
             Some(IoxEnable::Enable), None, None, None,
         );
+        iox.setup_pin(
+            IoxPort::PB, PWR_PIN, Some(IoxDir::Output), Some(IoxFunction::Gpio),
+            None, None, Some(IoxEnable::Enable), Some(IoxDriveStrength::Drive2mA),
+        );
+        // Waveshare's own Raspberry Pi driver asserts PWR before opening SPI.
+        iox.set_gpio_pin_value(IoxPort::PB, PWR_PIN, IoxValue::High);
         iox.set_gpio_pin_value(IoxPort::PB, DC_PIN, IoxValue::High);
         iox.set_gpio_pin_value(IoxPort::PB, RST_PIN, IoxValue::High);
     }
@@ -149,6 +155,7 @@ impl EpaperCmd {
     fn run(&self, env: &mut CommonEnv, action: &str) -> Result<String, &'static str> {
         let iox = IoxHal::new();
         Self::setup_pins(&iox);
+        std::thread::sleep(Duration::from_millis(100));
 
         let udma = UdmaGlobal::new();
         udma.udma_clock_config(PeriphId::Spim2, true);
@@ -210,7 +217,7 @@ impl<'a> ShellCmdApi<'a> for EpaperCmd {
         match tokens.next().unwrap_or("") {
             "info" => {
                 Ok(Some(format!(
-                    "Waveshare 2.13-inch V4; SPI2 mode 0 at {} Hz; frame={} bytes; HAT pins DIN19/SCK23/CS24/DC22/RST11/BUSY18; RTC disconnected.",
+                    "Waveshare 2.13-inch V4; SPI2 mode 0 at {} Hz; frame={} bytes; HAT pins DIN19/SCK23/CS24/DC22/RST11/BUSY18/PWR12; RTC disconnected.",
                     SPI_HZ, FRAME_BYTES
                 )))
             }
