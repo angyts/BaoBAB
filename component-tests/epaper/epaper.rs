@@ -245,8 +245,12 @@ impl EpaperCmd {
         }
 
         xous::yield_slice();
-        match Self::hal_scalar(cid, HalOpcode::ConfigureUdmaClock, PeriphId::Spim2 as usize, 0) {
-            Ok(_) => report.push("PASS: SPIM2 clock-disable IPC acknowledgement".to_string()),
+        // IframRange::drop() may disconnect the shared HAL CID when its final
+        // reference is released. Never reuse the pre-allocation CID after drop.
+        match Self::hal_connect().and_then(|fresh_cid| {
+            Self::hal_scalar(fresh_cid, HalOpcode::ConfigureUdmaClock, PeriphId::Spim2 as usize, 0)
+        }) {
+            Ok(_) => report.push("PASS: SPIM2 clock-disable IPC acknowledgement (fresh HAL connection)".to_string()),
             Err(e) => report.push(format!("FAIL: SPIM2 clock-disable IPC: {}", e)),
         }
         log::info!("EPAPER-DIAG: completed with {} report lines", report.len());
@@ -312,7 +316,11 @@ impl EpaperCmd {
         })();
 
         let _ = env.ticktimer.sleep_ms(1);
-        let clock_off = Self::hal_scalar(hal, HalOpcode::ConfigureUdmaClock, PeriphId::Spim2 as usize, 0);
+        // Dropping Spim drops IframRange, which can disconnect its shared HAL CID.
+        // Re-resolve the service before the cleanup request instead of reusing it.
+        let clock_off = Self::hal_connect().and_then(|fresh_hal| {
+            Self::hal_scalar(fresh_hal, HalOpcode::ConfigureUdmaClock, PeriphId::Spim2 as usize, 0)
+        });
         if let Err(error) = clock_off {
             log::error!("EPAPER: failed to disable SPIM2 clock: {}", error);
         }
