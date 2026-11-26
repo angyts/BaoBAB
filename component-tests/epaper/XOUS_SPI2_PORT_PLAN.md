@@ -4,13 +4,13 @@
 
 | Chip pad | SoC alternate function | Dabao header | HAT physical pin | Use |
 |---|---|---:|---:|---|
-| PC0 | SPIM_CLK_B[2] | 14 | 19 | SCK |
-| PC1 | SPIM_SD0_B[2] | 12 | 17 | MOSI / DIN |
+| PC0 | SPIM_CLK_B[2] | 14 | 23 | SCK |
+| PC1 | SPIM_SD0_B[2] | 12 | 19 | MOSI / DIN |
 | PC2 | SPIM_SD1_B[2] | 11 | — | MISO, unused |
-| PC3 | SPIM_CSN0_B[2] | 10 | 21 | CS |
+| PC3 | SPIM_CSN0_B[2] | 10 | 24 | CS |
 | PB2 | GPIO | 31 | 22 | DC |
 | PB3 | GPIO | 32 | 11 | RESET |
-| PB4 | GPIO input | 34 | 16 | BUSY |
+| PB4 | GPIO input | 34 | 18 | BUSY |
 
 SPI signals are on SPIM channel 2, AF2. GPIO lines remain normal GPIO.
 
@@ -56,3 +56,8 @@ The SPI controller and GPIO service must own these pads consistently. Do not set
 2. CS setup/hold and per-byte/per-command CS behaviour must be checked against the Xous SPIM command engine. GPIO CS may be preferable if needed.
 3. The Xous GPIO API/service and safe ownership pattern need to be wired into the console command.
 4. The 5 V rail at the HAT was not meter-verified by the user; only HAT pin 1 at 3.3 V was confirmed.
+
+
+## Wiring correction — 2026-11-26
+
+Use the corrected HAT physical header pins: MOSI 19, SCK 23, CS 24, DC 22, RESET 11, BUSY 18. The earlier values 17/19/21/16 were wrong. HAT physical pin 17 is 3.3 V; never connect the Dabao MOSI output to it. Keep the system unpowered while correcting the jumper wires.
