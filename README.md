@@ -66,3 +66,10 @@ See [Specification](docs/SPECIFICATION.md), [Security model](docs/SECURITY.md), 
 Experimental research prototype only. No real private keys, real funds or production wallet use. A project licence will be chosen after dependency and redistribution review; until then, contributions and reuse are subject to applicable copyright law.
 
 **BaoBAB — Because “Are you sure?” isn't enough.**
+
+## Baochip audio research
+
+The current audio investigation and hardware test ledger are maintained in [component-tests/bio-audio/RESEARCH_SUMMARY.md](component-tests/bio-audio/RESEARCH_SUMMARY.md). Supporting deep dives:
+- [ENGINEERING_RESEARCH.md](component-tests/bio-audio/ENGINEERING_RESEARCH.md) — BIO timing, other engineers' BIO/PIO implementations, MAX98357A and speaker research.
+- [UDMA_I2S_AND_PWM_AUDIO_RESEARCH.md](component-tests/bio-audio/UDMA_I2S_AND_PWM_AUDIO_RESEARCH.md) — dedicated I2S RTL, Xous driver gaps, Dabao pin routing and Armstrong Subero's PWM audio approach.
+- [component-tests/bio-audio/README.md](component-tests/bio-audio/README.md) — experimental source, installation notes and reported bench results.
