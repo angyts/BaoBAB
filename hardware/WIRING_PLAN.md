@@ -109,6 +109,28 @@ I2C electrical checks before connecting all modules:
 
 Manufacturer references: [TI DRV2605L datasheet](https://www.ti.com/lit/ds/symlink/drv2605l.pdf), [TDK/InvenSense MPU-6000/6050 register map](https://invensense.tdk.com/wp-content/uploads/2015/02/MPU-6000-Register-Map.pdf), [Analog Devices DS3231 datasheet](https://www.analog.com/media/en/technical-documentation/data-sheets/DS3231.pdf).
 
+## 5A. Optional PWM audio test route (in parallel with I2S)
+
+The Dabao physical pinout maps **PB1 / physical pin 29 to PWM1.1**. Preserve that pin for a PWM test output. Route PB1 to an accessible, labelled perfboard test pad or small removable two-pin test header:
+
+| Dabao physical pin | Dabao signal | Destination | Colour | Status |
+|---:|---|---|---|---|
+| 29 | PB1 / PWM1.1 | Labelled `PWM-AUDIO` test pad/header | Green | Pin mapping documented; firmware PWM setup and waveform still to be tested |
+
+**Do not connect this PWM pin directly to the 8.7-ohm speaker or to MAX98357A DIN.** The MAX98357A is an I2S digital-input amplifier; it is not an analogue/PWM-input amplifier. A filtered PWM audio signal needs an appropriate low-pass filter and an analogue-input speaker amplifier. No separate analogue amplifier has yet been positively identified in the photographed salvaged green PCB. Do not assume that PCB's battery/speaker connections expose an analogue input.
+
+### Mode selection
+
+The two paths are electrically different:
+- I2S mode: Dabao PC8/PC10/PC11 -> MAX98357A -> speaker.
+- PWM mode: Dabao PB1/PWM1.1 -> low-pass filter -> analogue-input amplifier -> speaker.
+
+A single signal jumper cannot safely switch the MAX98357A's digital input to PWM. Once a separate PWM amplifier is identified, switch **both speaker wires** between the two amplifier outputs using a two-pole selector (for example, a 2x3 header with two removable shunts). This is required because MAX98357A OUT+ and OUT- are bridge-tied outputs; neither is ground. Never connect both amplifier outputs together and never install both selector pairs simultaneously.
+
+Until an analogue amplifier and its input/power requirements are identified, solder only the PB1 `PWM-AUDIO` test pad. Keep the speaker connected to the MAX98357A for I2S testing; leave the PWM-amplifier side of the speaker selector unconnected. This preserves the option without risking the speaker or amplifier.
+
+The salvaged green PCB in the user's photo has an unidentified controller IC and battery/speaker connections. It is not yet confirmed to be a reusable analogue audio amplifier. Obtain a clear IC marking and trace/identify its signal inputs before connecting PB1 to it.
+
 ## 5. MAX98357A audio breakout and salvaged speaker
 
 | Dabao connection | MAX98357A pin | Colour |
@@ -153,74 +175,69 @@ Leave XDA, XCL and INT disconnected for the first I2C identity test. The module 
 
 ## 8. Joystick and four push buttons — six-GPIO two-phase matrix
 
-The current build uses a no-extra-parts scan arrangement for the **five-way 1-pole/5-throw joystick plus four two-terminal push buttons**. It uses six Dabao GPIOs rather than nine independent inputs.
+This no-purchase arrangement supports five joystick actions and four push buttons using six GPIO signals. It preserves PB1 as the optional PWM output.
 
-The user's joystick is reported as a 7.5 mm, six-terminal part (three terminals on each side). This matches common 7.5 × 7.5 mm, six-pin, 1-pole/5-throw navigation switches, but the exact manufacturer/part number is not printed in the provided photo. **Map its common terminal and five throws with a multimeter before soldering. Do not infer terminal order from package orientation.**
-
-### GPIO allocation
+### Matrix GPIO allocation
 
 | Role | Dabao pad | Dabao physical header pin | Function |
 |---|---|---:|---|
-| Matrix scan row | PB1 | 29 | Scan output; PWM1.1 alternate use is surrendered |
-| Joystick UP / column 0 | PC12 | 2 | GPIO input with pull-up; SD/QSPI alternate function only if that peripheral is enabled |
-| Joystick DOWN / column 1 | PC7 | 9 | GPIO input with pull-up; SD/QSPI alternate function only if that peripheral is enabled |
-| Joystick LEFT / column 2 | PC9 | 6 | GPIO input with pull-up; ADC0 alternate function only if ADC is enabled |
-| Joystick RIGHT / column 3 | PC2 | 11 | GPIO input with pull-up; SPI2 MISO is not used by the current e-paper write-only transfer |
-| Joystick CENTER / column 4 | PB5 | 35 | GPIO input with pull-up; available after removal of the incorrect HAT-PWR assignment |
+| Matrix scan row | PB5 | 35 | Two-phase scan output/input; available only after removing the obsolete PB5-to-HAT-pin-12 connection and removing PB5 PWR setup from e-paper firmware |
+| Joystick UP / column 0 | PC12 | 2 | GPIO input with pull-up; verify SD/QSPI not active |
+| Joystick DOWN / column 1 | PC7 | 9 | GPIO input with pull-up; verify SD/QSPI not active |
+| Joystick LEFT / column 2 | PC9 | 6 | GPIO input with pull-up; verify ADC0 not active |
+| Joystick RIGHT / column 3 | PC2 | 11 | GPIO input with pull-up; e-paper write-only path does not use MISO |
+| Joystick CENTER / column 4 | PC3 | 10 | Shared electrical net with e-paper CS0; must be time-multiplexed in firmware |
 
-This avoids the known reservations:
-- PB13 / physical 16 and PB14 / physical 15 are UART2 console RX/TX; do not use them.
-- PC13 / physical 1 is used by Dabao USB SE0 / boot-sense setup; do not use it.
-- PB11/PB12 are I2C0; PC0/PC1/PC3 and PB2/PB3/PB4 are e-paper.
-- PC8/PC10/PC11 remain allocated to MAX98357A BIO/I2S audio.
-- PB1's PWM1.1 alternate function is no longer available while it is used as the matrix scan row. The MAX98357A I2S audio path remains intact; the optional PWM-audio fallback is relinquished.
+Avoid these known reservations:
+- PB13 / physical 16 and PB14 / physical 15 are UART2 console RX/TX; do not use.
+- PC13 / physical 1 is used by Dabao USB SE0 / boot-sense setup; do not use.
+- PB11/PB12 are I2C0; PC0/PC1/PC3 and PB2/PB3/PB4 are e-paper signals; PC8/PC10/PC11 are the current MAX98357A BIO/I2S signals.
+- PB1 / physical pin 29 is reserved for PWM1.1 audio output in this plan, not a matrix row.
 
-PC7, PC9 and PC12 are GPIO pads with alternate SD/QSPI/ADC functions in the public pinout. This plan assumes the current Dabao Xous image does not enable SD/QSPI or ADC on those pads. Xous must explicitly mux them to GPIO for the input scanner. Confirm this in the firmware/pinmux audit before final power-on. The official pinout notes SD-card and ADC driver support as under development.
+PC7 and PC12 have SD/QSPI alternate functions, PC9 has ADC0, and PC2 has SPI2 MISO. These alternate functions do not by themselves prove the pin is unavailable as GPIO, but the active Xous image must explicitly mux them to GPIO and must not concurrently enable the corresponding peripheral. PC3 is more sensitive because it is the active e-paper SPI2 CS0 line; its use as a matrix column requires the software coordination described below.
 
 ### Joystick wiring
 
+The user's switch has six terminals (three on each side). Treat it as a common plus five independent switch contacts only after verifying with continuity mode.
+
 | Joystick contact (identify by continuity) | Connect to | Colour |
 |---|---|---|
-| COM (the one terminal that makes contact with each of the five throws when each direction/centre is pressed) | Dabao GND bus | Black |
+| COM | GND bus | Black |
 | UP throw | PC12 / physical pin 2 | Green |
 | DOWN throw | PC7 / physical pin 9 | Green |
 | LEFT throw | PC9 / physical pin 6 | Green |
 | RIGHT throw | PC2 / physical pin 11 | Green |
-| CENTER throw | PB5 / physical pin 35 | Green |
+| CENTER throw | PC3 / physical pin 10 | Green |
 
-Use the multimeter in continuity mode with the switch unpowered: identify the COM pad and record which of the other five pads closes to COM for each physical action. Then label the pads before wiring.
+Map the actual COM and throws with the switch unpowered. Do not infer the physical terminal order from package orientation.
 
-### Four push-button wiring
+### Four push buttons
 
-The four pushbuttons are wired between the PB1 scan-row wire and four joystick-column nets. They do **not** connect directly to GND.
+Each push button bridges the PB5 scan row to one joystick column. They do **not** connect directly to GND in this matrix.
 
 | Pushbutton | Terminal 1 | Terminal 2 | Event |
 |---|---|---|---|
-| Button 1 | PB1 / physical pin 29 scan row | PC12 / physical pin 2 column | BACK |
-| Button 2 | PB1 / physical pin 29 scan row | PC7 / physical pin 9 column | CONFIRM |
-| Button 3 | PB1 / physical pin 29 scan row | PC9 / physical pin 6 column | MENU |
-| Button 4 | PB1 / physical pin 29 scan row | PC2 / physical pin 11 column | CANCEL |
+| Button 1 | PB5 / physical pin 35 (scan row) | PC12 / physical pin 2 | BACK |
+| Button 2 | PB5 / physical pin 35 (scan row) | PC7 / physical pin 9 | CONFIRM |
+| Button 3 | PB5 / physical pin 35 (scan row) | PC9 / physical pin 6 | MENU |
+| Button 4 | PB5 / physical pin 35 (scan row) | PC2 / physical pin 11 | CANCEL |
 
-Use green for the PB1 row and green for each signal column; label every wire at both ends. The joystick COM remains connected to black GND. Do not connect the pushbutton terminals directly to GND in this matrix arrangement.
+Use green for all signal wires and label both ends. Joystick COM alone connects to black GND.
 
-### Required firmware scan behaviour
+### Firmware scan behaviour and display-CS sharing
 
-This is a hardware wiring topology; the corresponding two-phase scanner must be implemented in the Dabao console before the controls can be used.
+- Configure PC12, PC7, PC9, PC2 and (when not doing SPI) PC3 as GPIO inputs with pull-ups.
+- Joystick phase: PB5 is an input with pull-up. A pressed joystick direction/centre grounds its column and reads LOW. A pushbutton by itself cannot pull a column LOW in this phase because PB5 is not driving LOW.
+- Pushbutton phase: first ensure SPI2 is idle and its CS signal is deasserted. Set PB5's output latch LOW before changing PB5 to output-low. Read the five columns. A newly LOW column indicates its corresponding pushbutton.
+- End the scan by returning PB5 to input/high-impedance with pull-up.
+- PC3 is both HAT CS0 and the joystick CENTER column. During the matrix scan, configure PC3 as GPIO input with pull-up; its HAT CS net idles HIGH. A pressed CENTER or CANCEL switch may pull HAT CS LOW, but no SPI clocks are issued during scanning. Before any SPI transfer, stop scanning, put PB5 in high-impedance input mode, restore PC3 to SPIM2 CS0 alternate function, then perform the transfer. After the transfer, return PC3 to GPIO input mode before scanning resumes. Do not let the scan and SPI transfer run concurrently.
+- Add an IOX/SPI mutex or equivalent single-owner arbitration. A held button must never connect a PB5 output-low to a PC3 CS output. PB5 must be high impedance before PC3 returns to SPI alternate function.
+- Apply 15–20 ms software debounce initially. First acceptance target is one control pressed at a time; simultaneous joystick/button actions sharing a column are ambiguous.
 
-1. Configure the five columns PC12, PC7, PC9, PC2 and PB5 as GPIO inputs with pull-ups.
-2. Phase A (joystick): configure PB1 as a high-impedance input with pull-up. Read the five columns. A LOW identifies a pressed joystick direction/centre, because the joystick COM is grounded. A pushbutton alone does not pull a column LOW in this phase because PB1 is not driving LOW.
-3. Phase B (pushbuttons): set PB1's output latch LOW before changing its direction to output-low. Read the five columns again. A LOW that was not present in Phase A identifies a pushbutton connected to that column.
-4. Return PB1 to input/high-impedance with pull-up after the sample. Never drive PB1 HIGH while the buttons can connect it to a column.
-5. Apply software debounce (start around 15–20 ms) and generate press/release events.
+### Physical placement
 
-For the first implementation, treat the controls as single-key-at-a-time. A joystick action and its paired pushbutton pressed simultaneously share the same column and cannot be distinguished; other simultaneous combinations may be detectable but are not the acceptance target.
+Mount the joystick and four tactile switches on the **user-facing/outward side** of the perfboard or on the enclosure's front control panel, not between the perfboard and e-paper HAT. Place the joystick where the user's thumb can move it; arrange BACK / CONFIRM / MENU / CANCEL around or below it. If the SMD footprint does not line up with 2.54 mm perfboard pads, use short insulated two-wire leads from each switch to the designated matrix nets—do not force the switch legs into misaligned holes.
 
-### Conditions before soldering the control wires
-
-- Verify the joystick COM/throw mapping with continuity mode.
-- Verify that PC7, PC9 and PC12 are not assigned to an active SD/QSPI/ADC peripheral by the actual Xous build.
-- Update the e-paper firmware to the version that no longer configures PB5 as HAT PWR; remove any PB5-to-HAT-pin-12 wire.
-- Do not use the earlier direct-GPIO table that assigned PC13/PB13/PB14 to controls.
 ## 9. Power and assembly safety
 
 - Dabao spare 3.3 V regulator output capacity is not established. Keep each module's power branch removable and bring devices up individually.
