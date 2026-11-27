@@ -293,9 +293,56 @@ Each two-terminal button is soldered between PB5 scan-row and its assigned colum
 - Add an IOX/SPI mutex or equivalent single-owner arbitration. A held button must never connect a PB5 output-low to a PC3 CS output. PB5 must be high impedance before PC3 returns to SPI alternate function.
 - Apply 15–20 ms software debounce initially. First acceptance target is one control pressed at a time; simultaneous joystick/button actions sharing a column are ambiguous.
 
-### Physical placement
+### Physical placement — open PSP-style prototype
 
-Mount the joystick and four tactile switches on the **user-facing/outward side** of the perfboard or on the enclosure's front control panel, not between the perfboard and e-paper HAT. Place the joystick where the user's thumb can move it; arrange BACK / CONFIRM / MENU / CANCEL around or below it. If the SMD footprint does not line up with 2.54 mm perfboard pads, use short insulated two-wire leads from each switch to the designated matrix nets—do not force the switch legs into misaligned holes.
+The display, joystick and four action buttons must all face the user on the same side. The buttons must never be placed on the back of the unit or trapped between the display and the electronics.
+
+Use a **separate small control carrier/support board** for the joystick and four SMD pushbuttons. The carrier is a mechanical/electrical support for the switches, not another controller:
+- Position it to the left of the display for the joystick.
+- Position the four pushbuttons to the right of the display in a diamond.
+- Keep the display central and readable.
+- Keep the existing main perfboard/Dabao/peripheral stack behind the front-facing display assembly.
+- Connect the control carrier to the main perfboard with the seven-wire matrix harness in Section 8.
+- The control carrier and switches must be supported mechanically by a small perfboard offcut or rigid insulating support. Do not let soldered switch legs or the seven-wire harness carry the force of pressing the controls.
+- Do not solder the switches to the main electronics perfboard if doing so would put them behind the display.
+- Dry-fit the carrier beside the display first. Keep all exposed joints insulated and ensure the carrier cannot touch the HAT PCB or its header pins.
+
+Suggested top view (not to scale):
+
+```text
+                 USER / FRONT
+
+ +-------------------------------------------------------+
+ |                                                       |
+ |  [5-WAY JOYSTICK]     [ 2.13-inch E-PAPER ]   [  TRI  ]|
+ |        UP             [                  ]    [SQUARE] |
+ |     LEFT  RIGHT       [      DISPLAY     ]    [CIRCLE]|
+ |       DOWN            [                  ]      [ X ] |
+ |      CENTER                                      |
+ |                                                       |
+ +-------------------------------------------------------+
+
+             OPEN PROTOTYPE — NO ENCLOSURE YET
+   Main electronics board and Dabao remain behind display.
+   Control carrier(s) sit beside display, on the same face.
+```
+
+Suggested side view:
+
+```text
+ USER
+  |
+  v
+ [joystick/button caps]     [e-paper glass]
+ [SMD switch carrier]       [HAT V4 PCB]
+          |                      |
+     short labelled         main perfboard
+      wire harness          + Dabao/peripherals
+          |                      |
+          +------ rear wiring ---+
+```
+
+If no spare perfboard offcut or rigid insulating support is available, pause before soldering the switches; do not improvise a mechanically unsupported mounting. If the SMD footprint does not line up with 2.54 mm pads, use short insulated leads to the carrier pads—do not force component legs into misaligned holes.
 
 ## 9. Power and assembly safety
 
