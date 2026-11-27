@@ -125,7 +125,23 @@ The two paths are electrically different:
 - I2S mode: Dabao PC8/PC10/PC11 -> MAX98357A -> speaker.
 - PWM mode: Dabao PB1/PWM1.1 -> low-pass filter -> analogue-input amplifier -> speaker.
 
-A single signal jumper cannot safely switch the MAX98357A's digital input to PWM. Once a separate PWM amplifier is identified, switch **both speaker wires** between the two amplifier outputs using a two-pole selector (for example, a 2x3 header with two removable shunts). This is required because MAX98357A OUT+ and OUT- are bridge-tied outputs; neither is ground. Never connect both amplifier outputs together and never install both selector pairs simultaneously.
+A single signal jumper cannot safely switch the MAX98357A's digital input to PWM. Once a separate PWM amplifier is identified, switch **both speaker wires** between the two amplifier outputs using a two-pole selector. A practical header implementation is two independent 3-pin rows:
+
+```text
+Speaker terminal A ---- middle pin of row A
+I2S OUT+ -------------- left pin of row A
+PWM AMP OUT+ ---------- right pin of row A
+
+Speaker terminal B ---- middle pin of row B
+I2S OUT- -------------- left pin of row B
+PWM AMP OUT- ---------- right pin of row B
+
+For I2S: fit one removable jumper from middle-to-left on EACH row.
+For PWM: fit one removable jumper from middle-to-right on EACH row.
+Never fit both choices on either row. Power both amplifiers OFF before moving links.
+```
+
+This is a two-pole selector because MAX98357A OUT+ and OUT- are bridge-tied outputs; neither is ground. Never connect the amplifier outputs together. If no suitable shunts are already available, use two removable insulated jumper-wire links or leave the speaker connected to I2S and move its two leads manually only while power is off.
 
 Until an analogue amplifier and its input/power requirements are identified, solder only the PB1 `PWM-AUDIO` test pad. Keep the speaker connected to the MAX98357A for I2S testing; leave the PWM-amplifier side of the speaker selector unconnected. This preserves the option without risking the speaker or amplifier.
 
@@ -223,6 +239,49 @@ Each push button bridges the PB5 scan row to one joystick column. They do **not*
 | Button 4 | PB5 / physical pin 35 (scan row) | PC2 / physical pin 11 | CANCEL |
 
 Use green for all signal wires and label both ends. Joystick COM alone connects to black GND.
+
+### Button physical placement and underside wiring sketch
+
+The joystick and four tactile switches belong on the **outward/user-facing side** of the perfboard or on the enclosure's front control panel. They must not be trapped between the perfboard and the e-paper HAT. Use insulated short leads from SMD switch terminals to the perfboard's plated pads; strain-relieve the wires so the SMD terminals do not take mechanical force.
+
+Top view, user-facing side (suggested arrangement only):
+
+```text
+          FRONT / USER SIDE
+   +--------------------------------+
+   |                                |
+   |          [  JOYSTICK  ]        |
+   |             UP                 |
+   |          LEFT  o RIGHT         |
+   |            DOWN                |
+   |          (CENTER)              |
+   |                                |
+   |    [BACK] [CONFIRM]            |
+   |    [MENU] [CANCEL]             |
+   |                                |
+   +--------------------------------+
+           perfboard edge
+```
+
+Electrical view, underside of perfboard:
+
+```text
+                         FIVE JOYSTICK CONTACTS
+PC12 / pin 2  <----------- UP       +----[joystick]---- GND (black)
+PC7  / pin 9  <----------- DOWN     |
+PC9  / pin 6  <----------- LEFT     |
+PC2  / pin 11 <----------- RIGHT    |
+PC3  / pin 10 <----------- CENTER   |
+
+PB5 / pin 35  ----+----[BACK button]----- PC12 / pin 2
+(scan row)        +----[CONFIRM button]-- PC7  / pin 9
+                  +----[MENU button]----- PC9  / pin 6
+                  +----[CANCEL button]--- PC2  / pin 11
+
+PB1 / pin 29  -------------------------- PWM-AUDIO test pad only
+```
+
+Each two-terminal button is soldered between PB5 scan-row and its assigned column. The joystick's separate COM terminal connects to GND. Do not join the four pushbutton terminals to GND in this matrix arrangement. The exact six joystick terminals must be identified by continuity before soldering.
 
 ### Firmware scan behaviour and display-CS sharing
 
