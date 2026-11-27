@@ -50,7 +50,6 @@ const SPIM_CLOCK_HZ: u32 = 50_000_000;
 const DC_PIN: u8 = 2;   // PB2 / Dabao header 31 / HAT pin 22
 const RST_PIN: u8 = 3;  // PB3 / Dabao header 32 / HAT pin 11
 const BUSY_PIN: u8 = 4; // PB4 / Dabao header 34 / HAT pin 18
-const PWR_PIN: u8 = 5; // PB5 / Dabao header 35 / HAT pin 12 (BCM GPIO18)
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 const TX_TIMEOUT: Duration = Duration::from_secs(5);
@@ -81,12 +80,6 @@ impl EpaperCmd {
             IoxPort::PB, BUSY_PIN, Some(IoxDir::Input), Some(IoxFunction::Gpio),
             Some(IoxEnable::Enable), None, None, None,
         );
-        iox.setup_pin(
-            IoxPort::PB, PWR_PIN, Some(IoxDir::Output), Some(IoxFunction::Gpio),
-            None, None, Some(IoxEnable::Enable), Some(IoxDriveStrength::Drive2mA),
-        );
-        // Waveshare's own Raspberry Pi driver asserts PWR before opening SPI.
-        iox.set_gpio_pin_value(IoxPort::PB, PWR_PIN, IoxValue::High);
         iox.set_gpio_pin_value(IoxPort::PB, DC_PIN, IoxValue::High);
         iox.set_gpio_pin_value(IoxPort::PB, RST_PIN, IoxValue::High);
     }
@@ -224,9 +217,9 @@ impl EpaperCmd {
                 Ok(bank) => {
                     report.push(format!("PASS: GPIO {} bank read = 0x{:04x}", name, bank));
                     if name == "PB" {
-                        report.push(format!("INFO: PB2/DC={} PB3/RST={} PB4/BUSY={} PB5/PWR={}",
+                        report.push(format!("INFO: PB2/DC={} PB3/RST={} PB4/BUSY={}",
                             (bank >> DC_PIN) & 1, (bank >> RST_PIN) & 1,
-                            (bank >> BUSY_PIN) & 1, (bank >> PWR_PIN) & 1));
+                            (bank >> BUSY_PIN) & 1));
                     }
                 }
                 Err(e) => report.push(format!("FAIL: GPIO {} bank read: {}", name, e)),
@@ -354,8 +347,8 @@ impl<'a> ShellCmdApi<'a> for EpaperCmd {
         match tokens.next().unwrap_or("") {
             "debug" => {
                 match tokens.next().unwrap_or("status") {
-                    "on" => { set_debug(true); Ok(Some("Debug enabled globally for this Xous process (Trace log ceiling).".to_string())) }
-                    "off" => { set_debug(false); Ok(Some("Debug disabled (Info log ceiling).".to_string())) }
+                    "on" => { set_debug(true); Ok(Some("e-Paper-only debug logging enabled.".to_string())) }
+                    "off" => { set_debug(false); Ok(Some("e-Paper-only debug logging disabled.".to_string())) }
                     "status" => Ok(Some(format!("Debug is {}.", if DEBUG_ENABLED.load(Ordering::Relaxed) { "ON" } else { "OFF" }))),
                     _ => Ok(Some("Usage: epaper debug on|off|status".to_string())),
                 }
@@ -369,7 +362,7 @@ impl<'a> ShellCmdApi<'a> for EpaperCmd {
             }
             "info" => {
                 Ok(Some(format!(
-                    "Waveshare 2.13-inch V4; SPI2 mode 0 at {} Hz; frame={} bytes; HAT pins DIN19/SCK23/CS24/DC22/RST11/BUSY18/PWR12; RTC disconnected.",
+                    "Waveshare 2.13-inch e-Paper HAT V4; SPI2 mode 0 at {} Hz; frame={} bytes; HAT P1: DIN19/SCK23/CS24/DC22/RST11/BUSY18; VCC=3V3, RPI_5V=5V. No separate PWR pin in V4 interface.",
                     SPI_HZ, FRAME_BYTES
                 )))
             }
