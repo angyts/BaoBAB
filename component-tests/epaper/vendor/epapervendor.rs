@@ -1,14 +1,17 @@
 use crate::{CommonEnv, ShellCmdApi};
 use bao1x_api::{IoSetup,IoxHal,IoxPort,IoxDir,IoxFunction,IoxEnable,IoxDriveStrength,IoxValue};
 use std::{cell::RefCell,time::{Duration,Instant}};
+use core::sync::atomic::{AtomicU8, Ordering};
+static MOSI: AtomicU8 = AtomicU8::new(1);
+fn pin_for(p:usize)->(IoxPort,u8){if p==4 {(IoxPort::PC,MOSI.load(Ordering::Relaxed))}else{PINS[p]}}
 thread_local! { static CTX: RefCell<Option<State>> = RefCell::new(None); }
 struct State { io:IoxHal, failed:bool, busy:Option<Instant>, bytes:usize }
 const PINS:[(IoxPort,u8);6]=[(IoxPort::PB,3),(IoxPort::PB,2),(IoxPort::PC,3),(IoxPort::PB,4),(IoxPort::PC,1),(IoxPort::PC,0)];
-fn put(io:&IoxHal,p:usize,v:bool){let (port,pin)=PINS[p];io.set_gpio_pin_value(port,pin,if v {IoxValue::High}else{IoxValue::Low});}
-fn get(io:&IoxHal,p:usize)->bool{let (port,pin)=PINS[p];io.get_gpio_pin_value(port,pin)==IoxValue::High}
+fn put(io:&IoxHal,p:usize,v:bool){let (port,pin)=pin_for(p);io.set_gpio_pin_value(port,pin,if v {IoxValue::High}else{IoxValue::Low});}
+fn get(io:&IoxHal,p:usize)->bool{let (port,pin)=pin_for(p);io.get_gpio_pin_value(port,pin)==IoxValue::High}
 fn setup(io:&IoxHal){
  for p in [2usize,0,1,4,5,3] {
- let (port,pin)=PINS[p];
+ let (port,pin)=pin_for(p);
  io.setup_pin(port,pin,Some(IoxDir::Input),Some(IoxFunction::Gpio),Some(IoxEnable::Enable),Some(IoxEnable::Disable),Some(IoxEnable::Disable),Some(IoxDriveStrength::Drive2mA));
  if p!=3 {put(io,p,p==2||p==0);io.setup_pin(port,pin,Some(IoxDir::Output),None,None,None,None,None); }
  }
@@ -25,12 +28,13 @@ impl<'a> ShellCmdApi<'a> for EpaperVendorCmd{
  cmd_api!(epapervendor);
  fn process(&mut self,args:String,_env:&mut CommonEnv)->Result<Option<String>,xous::Error>{
  let a:Vec<_>=args.split_whitespace().collect();
- if a==["info"] {return Ok(Some("Vendor V4 C adapter v2 / GPIO SPI mode 0 / 4000 bytes / no PWR GPIO / experimental".into()))}
- if !matches!(a.as_slice(),["gpio"]|["busy"]|["test"]|["full"]|["fast"]|["partial"]|["hold","mosi","high"]|["hold","mosi","low"]){return Ok(Some("epapervendor info|gpio|busy|hold mosi high|hold mosi low|test|full|fast|partial".into()))}
+ if matches!(a.as_slice(),["mosi","pc1"]|["mosi","pc2"]){let io=IoxHal::new();for pin in [1u8,2]{io.setup_pin(IoxPort::PC,pin,Some(IoxDir::Input),Some(IoxFunction::Gpio),None,Some(IoxEnable::Disable),None,None);}let pin=if a[1]=="pc1"{1}else{2};MOSI.store(pin,Ordering::Relaxed);return Ok(Some(format!("Selected PC{} (Dabao physical pin {}). Both MOSI candidates released. Power off before moving DIN; selection resets to PC1 on reboot.",pin,13-pin)));}
+ if a==["info"] {return Ok(Some("Vendor V4 C adapter v3 / GPIO SPI mode 0 / 4000 bytes / no PWR GPIO / experimental".into()))}
+ if !matches!(a.as_slice(),["gpio"]|["busy"]|["test"]|["full"]|["fast"]|["partial"]|["hold","mosi","high"]|["hold","mosi","low"]){return Ok(Some("epapervendor info|mosi pc1|mosi pc2|gpio|busy|hold mosi high|hold mosi low|test|full|fast|partial".into()))}
  let io=IoxHal::new();setup(&io);
  if a[0]=="busy" {let mut high=0;for _ in 0..100 {if get(&io,3){high+=1;}std::thread::sleep(Duration::from_millis(10));}return Ok(Some(format!("BUSY samples HIGH={} LOW={}; no reset or SPI",high,100-high)));}
  if a[0]=="hold"{put(&io,4,a[2]=="high");return Ok(Some("MOSI held; CS inactive. Measure now; reset or run gpio to release.".into()))}
- let mut report=String::new();let mut ok=true;
+ let mut report=format!("MOSI selected PC{}\n",MOSI.load(Ordering::Relaxed));let mut ok=true;
  for p in [1usize,4,5] {for v in [false,true]{put(&io,p,v);std::thread::sleep(Duration::from_millis(2));let actual=get(&io,p);ok &= actual==v;report.push_str(&format!("{} requested {} read {}\n",["RST","DC","CS","BUSY","MOSI","SCK"][p],v,actual));}put(&io,p,false);}
  log::info!("VENDOR GPIO: {}",report);
  if a[0]=="gpio" || !ok {return Ok(Some(format!("{}GPIO match={}; no refresh",report,ok)))}
