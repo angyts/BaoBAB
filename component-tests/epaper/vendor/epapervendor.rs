@@ -9,8 +9,8 @@ fn get(io:&IoxHal,p:usize)->bool{let (port,pin)=PINS[p];io.get_gpio_pin_value(po
 fn setup(io:&IoxHal){
  for p in [2usize,0,1,4,5,3] {
  let (port,pin)=PINS[p];
- if p!=3 {put(io,p,p==2||p==0);}
- io.setup_pin(port,pin,Some(if p==3{IoxDir::Input}else{IoxDir::Output}),Some(IoxFunction::Gpio),Some(IoxEnable::Enable),Some(IoxEnable::Disable),None,Some(IoxDriveStrength::Drive2mA));
+ io.setup_pin(port,pin,Some(IoxDir::Input),Some(IoxFunction::Gpio),Some(IoxEnable::Enable),Some(IoxEnable::Disable),Some(IoxEnable::Disable),Some(IoxDriveStrength::Drive2mA));
+ if p!=3 {put(io,p,p==2||p==0);io.setup_pin(port,pin,Some(IoxDir::Output),None,None,None,None,None); }
  }
 }
 #[no_mangle] extern "C" fn DEV_Digital_Write(pin:u16,v:u8){CTX.with(|c|{if let Some(s)=c.borrow_mut().as_mut(){if !s.failed && (pin as usize)<3 {put(&s.io,pin as usize,v!=0);}}});}
@@ -25,12 +25,13 @@ impl<'a> ShellCmdApi<'a> for EpaperVendorCmd{
  cmd_api!(epapervendor);
  fn process(&mut self,args:String,_env:&mut CommonEnv)->Result<Option<String>,xous::Error>{
  let a:Vec<_>=args.split_whitespace().collect();
- if a==["info"] {return Ok(Some("Vendor V4 C / GPIO SPI mode 0 / 4000 bytes / no PWR GPIO / experimental".into()))}
- if !matches!(a.as_slice(),["gpio"]|["test"]|["full"]|["fast"]|["partial"]|["hold","mosi","high"]|["hold","mosi","low"]){return Ok(Some("epapervendor info|gpio|hold mosi high|hold mosi low|test|full|fast|partial".into()))}
+ if a==["info"] {return Ok(Some("Vendor V4 C adapter v2 / GPIO SPI mode 0 / 4000 bytes / no PWR GPIO / experimental".into()))}
+ if !matches!(a.as_slice(),["gpio"]|["busy"]|["test"]|["full"]|["fast"]|["partial"]|["hold","mosi","high"]|["hold","mosi","low"]){return Ok(Some("epapervendor info|gpio|busy|hold mosi high|hold mosi low|test|full|fast|partial".into()))}
  let io=IoxHal::new();setup(&io);
+ if a[0]=="busy" {let mut high=0;for _ in 0..100 {if get(&io,3){high+=1;}std::thread::sleep(Duration::from_millis(10));}return Ok(Some(format!("BUSY samples HIGH={} LOW={}; no reset or SPI",high,100-high)));}
  if a[0]=="hold"{put(&io,4,a[2]=="high");return Ok(Some("MOSI held; CS inactive. Measure now; reset or run gpio to release.".into()))}
  let mut report=String::new();let mut ok=true;
- for p in [1usize,4,5] {for v in [false,true]{put(&io,p,v);std::thread::sleep(Duration::from_millis(2));let actual=get(&io,p);ok &= actual==v;report.push_str(&format!("pin {} requested {} read {}\n",p,v,actual));}put(&io,p,false);}
+ for p in [1usize,4,5] {for v in [false,true]{put(&io,p,v);std::thread::sleep(Duration::from_millis(2));let actual=get(&io,p);ok &= actual==v;report.push_str(&format!("{} requested {} read {}\n",["RST","DC","CS","BUSY","MOSI","SCK"][p],v,actual));}put(&io,p,false);}
  log::info!("VENDOR GPIO: {}",report);
  if a[0]=="gpio" || !ok {return Ok(Some(format!("{}GPIO match={}; no refresh",report,ok)))}
  CTX.with(|c|*c.borrow_mut()=Some(State{io,failed:false,busy:None,bytes:0}));
@@ -41,6 +42,7 @@ impl<'a> ShellCmdApi<'a> for EpaperVendorCmd{
  else if a[0]=="partial"{stage("base",||EPD_2in13_V4_Display_Base(image.as_mut_ptr()));image[0..160].fill(0xff);stage("partial",||EPD_2in13_V4_Display_Partial(image.as_mut_ptr()));}
  else {stage("white",||EPD_2in13_V4_Clear());if !failed(){std::thread::sleep(Duration::from_secs(2));}stage("black",||EPD_2in13_V4_Clear_Black());if !failed(){std::thread::sleep(Duration::from_secs(2));}stage("pattern",||EPD_2in13_V4_Display(image.as_mut_ptr()));}
  stage("sleep",||EPD_2in13_V4_Sleep());
+ if !failed(){std::thread::sleep(Duration::from_secs(2));}
  }
  let result=CTX.with(|c|{let s=c.borrow_mut().take().unwrap();put(&s.io,2,true);put(&s.io,5,false);put(&s.io,4,false);format!("Vendor sequence ended: bytes={}, timeout={}. {} Verify panel visually.",s.bytes,s.failed,if s.failed{"Power off display; sleep not confirmed."}else{"Sleep command sent."})});
  Ok(Some(result))
